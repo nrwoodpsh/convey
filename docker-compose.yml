@@ -1,0 +1,146 @@
+name: py-msa-ai-starter
+
+x-python-env: &python-env
+  env_file: [.env]
+  restart: unless-stopped
+
+services:
+  # ── 인프라 ────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16   # RAG 임베딩용 pgvector 포함
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/db/init:/docker-entrypoint-initdb.d:ro
+    ports: ["${POSTGRES_HOST_PORT:-5432}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.8.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    ports: ["${KAFKAUI_PORT:-8090}:8080"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama:/root/.ollama
+    ports: ["${OLLAMA_PORT:-11434}:11434"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama --version || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── 애플리케이션 ──────────────────────────────────────
+  gateway:
+    build: {context: ., dockerfile: gateway/Dockerfile}
+    <<: *python-env
+    ports: ["${GATEWAY_PORT:-8080}:8000"]   # 유일한 외부 진입점
+    depends_on: [auth, sample-domain, llm-inference, agent, research, content]
+
+  auth:
+    build: {context: ., dockerfile: services/auth/Dockerfile}
+    <<: *python-env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/auth_db
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  sample-domain:
+    build: {context: ., dockerfile: services/sample-domain/Dockerfile}
+    <<: *python-env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/sample_db
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+
+  llm-inference:
+    build: {context: ., dockerfile: services/llm-inference/Dockerfile}
+    <<: *python-env
+    depends_on:
+      ollama: {condition: service_healthy}
+
+  # AI 에이전트 오케스트레이션(prompts+tools+RAG+멀티턴). 모델은 llm-inference에 위임.
+  agent:
+    build: {context: ., dockerfile: services/agent/Dockerfile}
+    <<: *python-env
+    depends_on: [llm-inference]
+
+  # ── CONVEY 도메인 (코어 라운드) ──────────────────────
+  research:
+    build: {context: ., dockerfile: services/research/Dockerfile}
+    <<: *python-env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/research_db
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+
+  # 리서치 소스 수집 워커 — HTTP 없음, Kafka로만 결합 (market-feed 원형 복제)
+  research-feed:
+    build: {context: ., dockerfile: services/research-feed/Dockerfile}
+    <<: *python-env
+    depends_on:
+      kafka: {condition: service_healthy}
+
+  content:
+    build: {context: ., dockerfile: services/content/Dockerfile}
+    <<: *python-env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/content_db
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      agent: {condition: service_started}
+
+  llm-trainer:
+    build: {context: ., dockerfile: services/llm-trainer/Dockerfile}
+    <<: *python-env
+    volumes:
+      - ./adapters:/app/adapters   # LoRA 어댑터 산출물
+    depends_on:
+      kafka: {condition: service_healthy}
+
+  # 외부 연동 워커(예: KIS) — HTTP 없음, 게이트웨이 뒤 아님, Kafka로만 결합
+  market-feed:
+    build: {context: ., dockerfile: services/market-feed/Dockerfile}
+    <<: *python-env
+    depends_on:
+      kafka: {condition: service_healthy}
+
+volumes:
+  pgdata:
+  ollama:

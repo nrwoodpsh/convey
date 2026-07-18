@@ -1,0 +1,25 @@
+# 워크스페이스 공통 개발도구 설정 (서비스별 런타임 의존성은 각 서비스 pyproject)
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+# FastAPI DI는 인자 기본값에 Depends()/Query() 등을 쓰는 게 정상 — B008 오탐 방지
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body",
+    "fastapi.Security", "fastapi.Header", "fastapi.Cookie", "fastapi.Form", "fastapi.File",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+exclude = ["alembic/"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["services", "libs", "gateway"]

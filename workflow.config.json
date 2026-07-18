@@ -1,0 +1,28 @@
+{
+  "contract": {
+    "file": "api-contract.py",
+    "gate": "python -m mypy --strict --ignore-missing-imports {file}",
+    "language": "python"
+  },
+  "build": {
+    "command": "make build"
+  },
+  "test": {
+    "command": "make test"
+  },
+  "drift": {
+    "mode": "warn",
+    "sourceGlobs": ["services/**", "gateway/**", "libs/**", "infra/**"],
+    "ignore": ["**/*.md", "**/test_*.py", "**/*_test.py", "**/alembic/versions/**"]
+  },
+  "publish": {
+    "target": "notion",
+    "notionParent": ""
+  },
+  "theme": {
+    "source": "getdesign.md",
+    "stack": "",
+    "targetPath": ""
+  },
+  "language": "korean"
+}

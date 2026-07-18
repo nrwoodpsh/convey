@@ -1,0 +1,17 @@
+[project]
+name = "research-feed-service"
+version = "0.1.0"
+description = "리서치 소스 수집 워커 (RSS/뉴스 피드 + 외부 API) → Kafka 발행. HTTP 없음."
+requires-python = ">=3.11"
+dependencies = [
+    "common",
+    "httpx>=0.27",
+    "feedparser>=6.0",  # RSS/Atom 파싱 (TODO(/builder): 실제 사용)
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

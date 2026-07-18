@@ -1,0 +1,20 @@
+[project]
+name = "llm-trainer-service"
+version = "0.1.0"
+description = "LoRA 파인튜닝 워커 (Kafka 잡 소비 → PEFT 학습 → Ollama export)"
+requires-python = ">=3.11"
+dependencies = [
+    "common",
+    "transformers>=4.44",
+    "peft>=0.12",
+    "datasets>=2.20",
+    "accelerate>=0.33",
+    "torch>=2.2",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

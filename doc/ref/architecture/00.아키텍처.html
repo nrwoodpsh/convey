@@ -1,0 +1,439 @@
+<title>CONVEY 아키텍처</title>
+<style>
+  :root {
+    --bg:#f5f7f9; --surface:#fff; --surface-2:#eef1f5; --ink:#131820; --ink-soft:#47525f;
+    --muted:#79838f; --border:#dce1e8; --border-strong:#c6cdd7;
+    --accent:#0f9e8c; --accent-ink:#0a6155; --accent-bg:rgba(15,158,140,0.09);
+    --alpha:#b07d16; --alpha-ink:#8a6210; --alpha-bg:rgba(176,125,22,0.10);
+    --commodity:#6a7480; --commodity-bg:rgba(106,116,128,0.10);
+    --db:#0f9e8c; --db-bg:rgba(15,158,140,0.08);
+    --graph:#6d5bd0; --graph-bg:rgba(109,91,208,0.10);
+    --up:#16a34a; --down:#dc2626;
+    --shadow:0 1px 2px rgba(16,24,40,.04),0 4px 16px rgba(16,24,40,.05);
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --maxw:1060px;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0c1015;--surface:#141a22;--surface-2:#1a222c;--ink:#e7edf4;--ink-soft:#b1bccb;
+    --muted:#838f9f;--border:#253039;--border-strong:#33404c;
+    --accent:#2dd4bf;--accent-ink:#8bf0e2;--accent-bg:rgba(45,212,191,.11);
+    --alpha:#e0a93a;--alpha-ink:#f0c877;--alpha-bg:rgba(224,169,58,.13);
+    --commodity:#99a3b1;--commodity-bg:rgba(153,163,177,.11);
+    --db:#2dd4bf;--db-bg:rgba(45,212,191,.10);--graph:#a78bfa;--graph-bg:rgba(167,139,250,.14);
+    --up:#34d399;--down:#f87171;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35);
+  }}
+  :root[data-theme="light"]{
+    --bg:#f5f7f9;--surface:#fff;--surface-2:#eef1f5;--ink:#131820;--ink-soft:#47525f;--muted:#79838f;
+    --border:#dce1e8;--border-strong:#c6cdd7;--accent:#0f9e8c;--accent-ink:#0a6155;--accent-bg:rgba(15,158,140,.09);
+    --alpha:#b07d16;--alpha-ink:#8a6210;--alpha-bg:rgba(176,125,22,.10);--commodity:#6a7480;--commodity-bg:rgba(106,116,128,.10);
+    --db:#0f9e8c;--db-bg:rgba(15,158,140,.08);--graph:#6d5bd0;--graph-bg:rgba(109,91,208,.10);--up:#16a34a;--down:#dc2626;--shadow:0 1px 2px rgba(16,24,40,.04),0 4px 16px rgba(16,24,40,.05);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0c1015;--surface:#141a22;--surface-2:#1a222c;--ink:#e7edf4;--ink-soft:#b1bccb;--muted:#838f9f;
+    --border:#253039;--border-strong:#33404c;--accent:#2dd4bf;--accent-ink:#8bf0e2;--accent-bg:rgba(45,212,191,.11);
+    --alpha:#e0a93a;--alpha-ink:#f0c877;--alpha-bg:rgba(224,169,58,.13);--commodity:#99a3b1;--commodity-bg:rgba(153,163,177,.11);
+    --db:#2dd4bf;--db-bg:rgba(45,212,191,.10);--graph:#a78bfa;--graph-bg:rgba(167,139,250,.14);--up:#34d399;--down:#f87171;--shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px 96px;}
+
+  header{padding:52px 0 24px;}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 14px;display:flex;flex-wrap:wrap;gap:8px 14px;}
+  h1{font-size:clamp(1.8rem,4vw,2.7rem);line-height:1.1;margin:0 0 12px;letter-spacing:-.02em;text-wrap:balance;font-weight:700;}
+  h1 .accent{color:var(--accent);}
+  .lede{font-size:clamp(1rem,1.5vw,1.12rem);color:var(--ink-soft);max-width:62ch;margin:0;}
+  .lede .kicker{color:var(--accent);font-weight:600;}
+
+  section{margin-top:46px;}
+  .sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
+  .sec-num{font-family:var(--mono);font-size:.8rem;color:var(--accent-ink);background:var(--accent-bg);border:1px solid var(--accent);border-radius:6px;padding:2px 8px;font-weight:600;}
+  h2{font-size:1.45rem;margin:0;letter-spacing:-.01em;}
+  .sec-sub{color:var(--muted);font-size:.95rem;margin:6px 0 0;width:100%;}
+
+  /* ---------- DIAGRAM ---------- */
+  .diagram{border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:var(--shadow);padding:26px 22px;overflow-x:auto;}
+  .layer{display:grid;grid-template-columns:100px 1fr;gap:20px;align-items:center;min-width:660px;}
+  .layer-tag{font-family:var(--mono);font-size:.68rem;font-weight:700;letter-spacing:.06em;color:var(--accent-ink);text-align:right;line-height:1.35;}
+  .layer-tag .st{display:block;color:var(--muted);font-weight:600;font-size:.62rem;}
+  .row{display:flex;flex-wrap:wrap;gap:18px;align-items:stretch;}
+
+  .node{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:10px;padding:12px 15px;min-width:126px;position:relative;}
+  .node .svc{font-family:var(--mono);font-size:.85rem;font-weight:600;color:var(--ink);}
+  .node .role{font-size:.74rem;color:var(--muted);margin-top:3px;line-height:1.4;}
+  .node.alpha{border-color:var(--alpha);background:var(--alpha-bg);border-left:3px solid var(--alpha);}
+  .node.commodity{border-left:3px solid var(--commodity);}
+  .node.commodity .svc{color:var(--ink-soft);}
+  .node.ext{background:var(--surface);border-style:dashed;border-color:var(--border-strong);}
+  .node.ext .svc{color:var(--ink-soft);font-weight:600;}
+  .node .tag{position:absolute;top:-9px;right:10px;font-family:var(--mono);font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:4px;letter-spacing:.03em;}
+  .tag.a{color:var(--alpha-ink);background:var(--alpha-bg);border:1px solid var(--alpha);}
+  .tag.c{color:var(--commodity);background:var(--commodity-bg);border:1px solid var(--commodity);}
+
+  /* db + ownership group */
+  .group{display:flex;align-items:center;gap:0;}
+  .group .own{position:relative;width:30px;height:2px;background:var(--db);opacity:.7;}
+  .group .own::after{content:"";position:absolute;right:0;top:-3px;width:0;height:0;border-left:6px solid var(--db);border-top:4px solid transparent;border-bottom:4px solid transparent;}
+  .db{background:var(--db-bg);border:1.5px solid var(--db);border-radius:5px/13px;padding:9px 13px;min-width:120px;}
+  .db .svc{font-family:var(--mono);font-size:.78rem;font-weight:600;color:var(--accent-ink);}
+  .db .role{font-size:.68rem;color:var(--muted);}
+  .db.graph{background:var(--graph-bg);border-color:var(--graph);}
+  .db.graph .svc{color:var(--graph);}
+  .dbcol{display:flex;flex-direction:column;gap:8px;}
+
+  /* vertical connector between layers */
+  .conn{display:flex;align-items:center;gap:12px;padding:14px 0 14px 120px;}
+  .arrow-v{display:flex;flex-direction:column;align-items:center;}
+  .arrow-v .vline{width:2.5px;height:20px;background:var(--accent);border-radius:2px;}
+  .arrow-v .vhead{width:0;height:0;border-top:9px solid var(--accent);border-left:6px solid transparent;border-right:6px solid transparent;}
+  .conn .topic{font-family:var(--mono);font-size:.72rem;color:var(--accent-ink);background:var(--accent-bg);border:1px solid var(--accent);border-radius:5px;padding:2px 8px;}
+  .conn .lbl{font-size:.8rem;color:var(--ink-soft);}
+
+  /* horizontal arrow — line + head */
+  .arrow-h{display:inline-flex;align-items:center;align-self:center;flex:0 0 auto;}
+  .arrow-h .l{width:26px;height:2.5px;background:var(--accent);border-radius:2px;}
+  .arrow-h .h{width:0;height:0;border-left:9px solid var(--accent);border-top:6px solid transparent;border-bottom:6px solid transparent;}
+  .arrow-h.sm .l{width:18px;}
+
+  /* stage B hub + lanes */
+  .hub-wrap{display:flex;flex-wrap:wrap;gap:18px;align-items:center;}
+  .lanes{display:flex;flex-direction:column;gap:14px;}
+  .lane{display:flex;align-items:center;gap:14px;flex-wrap:wrap;border:1px dashed var(--border-strong);border-radius:9px;padding:12px 15px;}
+  .lane-t{font-family:var(--mono);font-size:.64rem;color:var(--muted);letter-spacing:.04em;min-width:80px;}
+
+  .legend{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:18px;font-size:.82rem;color:var(--ink-soft);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:20px;height:13px;border-radius:4px;display:inline-block;border:1px solid;}
+  .sw.a{background:var(--alpha-bg);border-color:var(--alpha);} .sw.c{background:var(--commodity-bg);border-color:var(--commodity);}
+  .sw.d{background:var(--db-bg);border-color:var(--db);} .sw.e{background:var(--surface);border-color:var(--border-strong);border-style:dashed;}
+  .sw.g{background:var(--graph-bg);border-color:var(--graph);}
+
+  /* ---------- table ---------- */
+  .table-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);}
+  table{border-collapse:collapse;width:100%;font-size:.86rem;min-width:640px;background:var(--surface);}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:top;}
+  thead th{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);background:var(--surface-2);}
+  tbody tr:last-child td{border-bottom:none;}
+  td .svc{font-family:var(--mono);font-weight:600;}
+  .pill{font-family:var(--mono);font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap;}
+  .pill.a{color:var(--alpha-ink);background:var(--alpha-bg);border:1px solid var(--alpha);}
+  .pill.c{color:var(--commodity);background:var(--commodity-bg);border:1px solid var(--commodity);}
+  .pill.n{color:var(--ink-soft);background:var(--surface-2);border:1px solid var(--border-strong);}
+  .st2{font-size:.8rem;color:var(--ink-soft);}
+
+  /* ---------- cross-cutting ---------- */
+  .cc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;}
+  .cc{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:14px 16px;box-shadow:var(--shadow);}
+  .cc h4{margin:0 0 5px;font-size:.92rem;}
+  .cc h4 code,.cc p code{font-family:var(--mono);font-size:.82rem;color:var(--accent-ink);}
+  .cc p{margin:0;font-size:.82rem;color:var(--ink-soft);}
+
+  footer{margin-top:56px;padding-top:22px;border-top:1px solid var(--border);color:var(--muted);font-size:.82rem;}
+  footer .paths{font-family:var(--mono);font-size:.76rem;display:flex;flex-direction:column;gap:3px;margin-top:10px;}
+  footer .paths span b{color:var(--ink-soft);font-weight:600;}
+
+  /* ---------- stores (data) ---------- */
+  .stores{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;}
+  .store{border:1px solid var(--border);border-radius:12px;padding:16px;background:var(--surface);box-shadow:var(--shadow);border-top:3px solid var(--db);}
+  .store.graph{border-top-color:var(--graph);}
+  .store h4{margin:0 0 3px;font-family:var(--mono);font-size:.9rem;color:var(--accent-ink);}
+  .store.graph h4{color:var(--graph);}
+  .store .sub{font-size:.76rem;color:var(--muted);margin:0 0 10px;}
+  .store ul{margin:0;padding-left:16px;font-size:.82rem;color:var(--ink-soft);line-height:1.75;}
+  .store code{font-family:var(--mono);font-size:.77rem;}
+  .gschema{display:flex;flex-direction:column;gap:11px;padding:16px;border:1px dashed var(--border-strong);border-radius:12px;margin-top:14px;background:var(--surface);overflow-x:auto;}
+  .gtriple{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .gnode{font-family:var(--mono);font-size:.78rem;font-weight:600;padding:6px 12px;border-radius:999px;border:1.5px solid var(--graph);background:var(--graph-bg);color:var(--graph);white-space:nowrap;}
+  .gnode.ev{border-color:var(--alpha);background:var(--alpha-bg);color:var(--alpha-ink);}
+  .gnode.se{border-color:var(--accent);background:var(--accent-bg);color:var(--accent-ink);}
+  .gedge{display:inline-flex;flex-direction:column;align-items:center;font-family:var(--mono);font-size:.6rem;color:var(--accent-ink);}
+  .gedge .ar{display:flex;align-items:center;}
+  .gedge .ar .l{width:26px;height:2px;background:var(--accent);}
+  .gedge .ar .h{width:0;height:0;border-left:8px solid var(--accent);border-top:5px solid transparent;border-bottom:5px solid transparent;}
+
+  /* ---------- domain detail cards ---------- */
+  .dcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;}
+  .dcard{border:1px solid var(--border);border-radius:12px;padding:15px 16px;background:var(--surface);box-shadow:var(--shadow);}
+  .dcard.a{border-left:3px solid var(--alpha);} .dcard.c{border-left:3px solid var(--commodity);}
+  .dcard h4{margin:0 0 8px;font-size:1rem;}
+  .dcard h4 .svc{font-family:var(--mono);}
+  .drow{display:grid;grid-template-columns:58px 1fr;gap:10px;font-size:.8rem;padding:6px 0;border-top:1px solid var(--border);}
+  .drow:first-of-type{border-top:none;}
+  .drow .k{font-family:var(--mono);font-size:.64rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding-top:2px;}
+  .drow .v{color:var(--ink-soft);line-height:1.5;}
+  .drow .v code{font-family:var(--mono);font-size:.74rem;color:var(--accent-ink);}
+
+  @media (prefers-reduced-motion:no-preference){
+    header>*,section{animation:rise .5s ease both;}
+    @keyframes rise{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow"><span>KRW · KOSPI</span><span>MSA · Kafka · Neo4j · Postgres</span><span>ARCHITECTURE v1</span></p>
+    <h1>CONVEY — <span class="accent">시스템 아키텍처</span></h1>
+    <p class="lede">주식 시세·뉴스를 종목·사건별로 쌓고 → 이슈 종목을 짚어 → 근거 대본과 정확한 차트로 쇼츠를 만드는 <span class="kicker">3단 이벤트 기반 MSA</span>.</p>
+  </header>
+
+  <!-- 01 DIAGRAM -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <h2>구성도</h2>
+      <p class="sec-sub">위 → 아래로 흐른다. 세로 화살표 라벨 = Kafka 토픽 / 트리거. 원통 옆 서비스 = 그 DB의 소유자.</p>
+    </div>
+
+    <div class="diagram">
+      <!-- Layer 0 -->
+      <div class="layer">
+        <div class="layer-tag">외부 소스<span class="st">EXTERNAL</span></div>
+        <div class="row">
+          <div class="node ext"><div class="svc">KIS OpenAPI</div><div class="role">주식 시세</div></div>
+          <div class="node ext"><div class="svc">뉴스 · RSS</div><div class="role">기사 피드</div></div>
+        </div>
+      </div>
+      <div class="conn"><span class="arrow-v"><span class="vline"></span><span class="vhead"></span></span><span class="lbl">수집</span></div>
+
+      <!-- Layer 1 -->
+      <div class="layer">
+        <div class="layer-tag">STAGE A<span class="st">수집 워커</span></div>
+        <div class="row">
+          <div class="node"><div class="svc">market-feed</div><div class="role">워커 · 시세 수집</div></div>
+          <div class="node alpha"><span class="tag a">★</span><div class="svc">news-feed</div><div class="role">워커 · 종목·사건 태깅</div></div>
+        </div>
+      </div>
+      <div class="conn"><span class="arrow-v"><span class="vline"></span><span class="vhead"></span></span><span class="topic">market.ticks</span><span class="topic">research.ingested</span></div>
+
+      <!-- Layer 2 -->
+      <div class="layer">
+        <div class="layer-tag">STAGE A<span class="st">저장 · 선별</span></div>
+        <div class="row">
+          <div class="group">
+            <div class="node alpha"><span class="tag a">★</span><div class="svc">research</div><div class="role">API · 추출(NER+관계)<br>→ 그래프 + 사실</div></div>
+            <div class="own"></div>
+            <div class="dbcol">
+              <div class="db graph"><div class="svc">Neo4j</div><div class="role">지식 그래프 · 관계·인과</div></div>
+              <div class="db"><div class="svc">research_db</div><div class="role">Postgres · 시세·기사 +pgvector</div></div>
+            </div>
+          </div>
+          <div class="node alpha"><span class="tag a">★</span><div class="svc">issue-detector</div><div class="role">워커 · 두 토픽 구독<br>→ 이슈 종목 랭킹</div></div>
+        </div>
+      </div>
+      <div class="conn"><span class="arrow-v"><span class="vline"></span><span class="vhead"></span></span><span class="lbl">사람이 이슈 종목 선택</span><span class="topic">POST /content/generate</span></div>
+
+      <!-- Layer 3 -->
+      <div class="layer">
+        <div class="layer-tag">STAGE B<span class="st">제작</span></div>
+        <div class="hub-wrap">
+          <div class="node ext"><div class="svc">사용자</div><div class="role">트리거</div></div>
+          <span class="arrow-h"><span class="l"></span><span class="h"></span></span>
+          <div class="node"><div class="svc">gateway</div><div class="role">단일진입·JWT·HMAC</div></div>
+          <span class="arrow-h"><span class="l"></span><span class="h"></span></span>
+          <div class="group">
+            <div class="node alpha"><span class="tag a">★</span><div class="svc">content</div><div class="role">API · 제작 총괄<br>잡 · consumer</div></div>
+            <div class="own"></div>
+            <div class="db"><div class="svc">content_db</div><div class="role">+ pgvector 히스토리</div></div>
+          </div>
+          <span class="arrow-h"><span class="l"></span><span class="h"></span></span>
+          <div class="lanes">
+            <div class="lane">
+              <span class="lane-t">근거 스크립트</span>
+              <div class="node alpha"><span class="tag a">★</span><div class="svc">agent</div><div class="role">RAG: research·content /search</div></div>
+              <span class="arrow-h sm"><span class="l"></span><span class="h"></span></span>
+              <div class="node"><div class="svc">llm-inference</div></div>
+              <span class="arrow-h sm"><span class="l"></span><span class="h"></span></span>
+              <div class="node ext"><div class="svc">Ollama</div><div class="role">로컬 LLM</div></div>
+            </div>
+            <div class="lane">
+              <span class="lane-t">자산 · 외주</span>
+              <div class="node commodity"><span class="tag c">외주</span><div class="svc">image-gen · tts</div><div class="role">broll · 음성</div></div>
+              <span class="arrow-h sm"><span class="l"></span><span class="h"></span></span>
+              <div class="node ext"><div class="svc">외부 미디어 API</div></div>
+            </div>
+            <div class="lane">
+              <span class="lane-t">정확 렌더</span>
+              <div class="node alpha"><span class="tag a">★</span><div class="svc">video-assembly</div><div class="role">차트·수치 오버레이 · ffmpeg → mp4</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="conn"><span class="arrow-v"><span class="vline"></span><span class="vhead"></span></span><span class="lbl">완성본 → ✋승인</span><span class="topic">content.approved</span></div>
+
+      <!-- Layer 4 -->
+      <div class="layer">
+        <div class="layer-tag">발행<span class="st">PUBLISH</span></div>
+        <div class="row" style="align-items:center">
+          <div class="group">
+            <div class="node commodity"><span class="tag c">외주</span><div class="svc">publishing</div><div class="role">API · YouTube 업로드</div></div>
+            <div class="own"></div>
+            <div class="db"><div class="svc">publishing_db</div></div>
+          </div>
+          <span class="arrow-h"><span class="l"></span><span class="h"></span></span>
+          <div class="node ext"><div class="svc">YouTube</div><div class="role">Shorts</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><i class="sw a"></i> ★ 알파 — 자체 구현</span>
+      <span><i class="sw c"></i> 외주 — 커모디티</span>
+      <span><i class="sw g"></i> Neo4j 지식 그래프</span>
+      <span><i class="sw d"></i> Postgres DB</span>
+      <span><i class="sw e"></i> 외부 시스템</span>
+    </div>
+  </section>
+
+  <!-- 02 SERVICE MAP -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <h2>서비스 맵</h2>
+      <p class="sec-sub">폴더 = 서비스. 배포 형태 · 소유 DB · 자체/외주 구분.</p>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>서비스</th><th>종류</th><th>DB</th><th>역할</th><th>구분</th><th>상태</th></tr></thead>
+        <tbody>
+          <tr><td class="svc">gateway</td><td>API</td><td>—</td><td>단일 진입 · JWT · HMAC 서명</td><td><span class="pill n">공통</span></td><td class="st2">유지</td></tr>
+          <tr><td class="svc">auth</td><td>API</td><td>auth_db</td><td>JWT 발급(로그인)</td><td><span class="pill n">공통</span></td><td class="st2">유지</td></tr>
+          <tr><td class="svc">market-feed</td><td>워커</td><td>—</td><td>KIS 시세 수집 → Kafka</td><td><span class="pill a">★ 소스</span></td><td class="st2">실사용 복귀</td></tr>
+          <tr><td class="svc">news-feed</td><td>워커</td><td>—</td><td>뉴스·RSS 수집 + 종목·사건 태깅</td><td><span class="pill a">★</span></td><td class="st2">research-feed 개명</td></tr>
+          <tr><td class="svc">research</td><td>API</td><td>Neo4j + research_db +pgvector</td><td>지식 그래프(관계·인과) + 시세·기사 사실 + 검색</td><td><span class="pill a">★ 심장</span></td><td class="st2">골격O · 그래프 추가</td></tr>
+          <tr><td class="svc">issue-detector</td><td>워커</td><td>—</td><td>시세급변+뉴스빈도 → 이슈 종목 랭킹</td><td><span class="pill a">★</span></td><td class="st2">신규</td></tr>
+          <tr><td class="svc">content</td><td>API</td><td>content_db +pgvector</td><td>제작 총괄 · 잡 · consumer · 히스토리</td><td><span class="pill a">★</span></td><td class="st2">골격O</td></tr>
+          <tr><td class="svc">agent</td><td>API</td><td>—</td><td>RAG 2곳 검색 → 근거 스크립트</td><td><span class="pill a">★</span></td><td class="st2">확장</td></tr>
+          <tr><td class="svc">llm-inference</td><td>API</td><td>—</td><td>로컬 Ollama 창구</td><td><span class="pill n">공통</span></td><td class="st2">유지</td></tr>
+          <tr><td class="svc">image-gen · tts</td><td>API/워커</td><td>—</td><td>broll 이미지 · TTS (외부 API 래퍼)</td><td><span class="pill c">외주</span></td><td class="st2">신규(얇게)</td></tr>
+          <tr><td class="svc">video-assembly</td><td>워커</td><td>—</td><td>정확한 차트·수치 오버레이 + ffmpeg</td><td><span class="pill a">★</span></td><td class="st2">신규(자체)</td></tr>
+          <tr><td class="svc">publishing</td><td>API</td><td>publishing_db</td><td>YouTube 업로드 · 발행 승인</td><td><span class="pill c">외주</span></td><td class="st2">복제</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 03 DATA / KNOWLEDGE -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <h2>데이터 · 지식 저장</h2>
+      <p class="sec-sub">LoRA를 안 쓰므로 지식 레이어가 품질의 유일한 레버. 관계·인과 = 그래프(알파), 사실 = Postgres. research가 두 스토어 소유(ADR 0005).</p>
+    </div>
+    <div class="stores">
+      <div class="store graph">
+        <h4>Neo4j · research_graph</h4>
+        <p class="sub">관계·인과 — 알파① 엔진 (다홉 traversal)</p>
+        <ul>
+          <li>노드: <code>Stock</code> · <code>Event</code> · <code>Sector</code> · <code>Company</code></li>
+          <li>엣지: <code>HAS_EVENT</code> · <code>AFFECTS</code> · <code>SUPPLIES</code> · <code>COMPETES</code> · <code>BELONGS_TO</code></li>
+          <li>용도: "삼성 실적↑ → 협력사 수혜 → 섹터 파급" 관계 사슬</li>
+        </ul>
+      </div>
+      <div class="store">
+        <h4>Postgres · research_db +pgvector</h4>
+        <p class="sub">사실 — SQL 정확 조회 + 의미검색 보조</p>
+        <ul>
+          <li><code>PriceTick</code> 시세 시계열 (차트·이슈감지)</li>
+          <li><code>Article</code> 원문 + 출처·라이선스 (필수)</li>
+          <li><code>Embedding</code> pgvector (테마 의미검색 보조)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="gschema">
+      <div class="gtriple"><span class="gnode">삼성전자 · Stock</span><span class="gedge"><span class="lab">HAS_EVENT</span><span class="ar"><span class="l"></span><span class="h"></span></span></span><span class="gnode ev">실적발표 · Event</span></div>
+      <div class="gtriple"><span class="gnode">삼성전자 · Stock</span><span class="gedge"><span class="lab">AFFECTS · 수혜</span><span class="ar"><span class="l"></span><span class="h"></span></span></span><span class="gnode">협력사 A · Stock</span><span class="gedge"><span class="lab">SUPPLIES</span><span class="ar"><span class="l"></span><span class="h"></span></span></span><span class="gnode">삼성전자 · Stock</span></div>
+      <div class="gtriple"><span class="gnode">삼성전자 · Stock</span><span class="gedge"><span class="lab">BELONGS_TO</span><span class="ar"><span class="l"></span><span class="h"></span></span></span><span class="gnode se">반도체 · Sector</span></div>
+    </div>
+    <p class="sec-sub" style="margin-top:12px">진짜 일 = <b style="color:var(--ink-soft)">추출 파이프라인</b>(뉴스 → NER + 관계추출 → 그래프 엣지). 여기가 품질의 원천. <code style="font-family:var(--mono)">news-feed</code> 태깅 + <code style="font-family:var(--mono)">research</code> 관계 구축.</p>
+  </section>
+
+  <!-- 04 EVENTS / TOPICS -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">04</span>
+      <h2>이벤트 · 토픽</h2>
+      <p class="sec-sub">단계 결합은 Kafka 비동기 잡. 축적과 제작은 자동으로 안 이어짐 — 사람의 이슈 종목 선택이 방아쇠.</p>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>토픽</th><th>발행</th><th>구독</th><th>비고</th></tr></thead>
+        <tbody>
+          <tr><td class="svc">market.ticks</td><td>market-feed</td><td>research · issue-detector</td><td class="st2">시세 스트림</td></tr>
+          <tr><td class="svc">research.ingested</td><td>news-feed</td><td>research · issue-detector</td><td class="st2">축적 (콘텐츠 자동유발 X)</td></tr>
+          <tr><td class="svc">content.generate</td><td>content (API·on-demand)</td><td>content consumer</td><td class="st2">잡 큐 (비동기)</td></tr>
+          <tr><td class="svc">image.generate · tts.generate</td><td>content</td><td>image-gen · tts (외주)</td><td class="st2">미디어 fan-out</td></tr>
+          <tr><td class="svc">content.approved</td><td>사람 승인</td><td>publishing</td><td class="st2">발행 트리거</td></tr>
+          <tr><td class="svc">content.published</td><td>publishing</td><td>(관측)</td><td class="st2">발행 완료</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sec-sub" style="margin-top:10px">이슈 종목 랭킹·합성 완료는 이벤트가 아니라 내부 상태/조회. 토픽명은 <code style="font-family:var(--mono)">/design</code> 확정.</p>
+  </section>
+
+  <!-- 05 DOMAIN DETAIL -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">05</span>
+      <h2>도메인 상세</h2>
+      <p class="sec-sub">3도메인(research·content·publishing) + issue-detector 컴포넌트. 각 서비스·저장·이벤트·핵심.</p>
+    </div>
+    <div class="dcards">
+      <div class="dcard a">
+        <h4>① <span class="svc">research</span> — 축적</h4>
+        <div class="drow"><span class="k">서비스</span><span class="v"><code>research</code>(API) · <code>market-feed</code> · <code>news-feed</code>(워커)</span></div>
+        <div class="drow"><span class="k">저장</span><span class="v">Neo4j 그래프 + Postgres <code>research_db</code>+pgvector</span></div>
+        <div class="drow"><span class="k">이벤트</span><span class="v">발행 <code>market.ticks</code>·<code>research.ingested</code></span></div>
+        <div class="drow"><span class="k">핵심</span><span class="v">종목·사건 관계 축적. 출처·라이선스 필수. 자동 유발 X</span></div>
+      </div>
+      <div class="dcard a">
+        <h4>② <span class="svc">issue-detector</span> — 선별</h4>
+        <div class="drow"><span class="k">서비스</span><span class="v"><code>issue-detector</code>(워커)</span></div>
+        <div class="drow"><span class="k">저장</span><span class="v">스트림 자체 집계 (DB 직접접속 X)</span></div>
+        <div class="drow"><span class="k">이벤트</span><span class="v">구독 <code>market.ticks</code>·<code>research.ingested</code></span></div>
+        <div class="drow"><span class="k">핵심</span><span class="v">시세급변+뉴스빈도 → 오늘의 이슈 종목 랭킹 (알파2)</span></div>
+      </div>
+      <div class="dcard a">
+        <h4>③ <span class="svc">content</span> — 제작</h4>
+        <div class="drow"><span class="k">서비스</span><span class="v"><code>content</code>·<code>agent</code>·<code>llm-inference</code>·<code>image-gen</code>·<code>tts</code>·<code>video-assembly</code></span></div>
+        <div class="drow"><span class="k">저장</span><span class="v">Postgres <code>content_db</code>+pgvector(히스토리)</span></div>
+        <div class="drow"><span class="k">이벤트</span><span class="v">자기큐 <code>content.generate</code> / fan-out 미디어 / 발행 <code>content.approved</code></span></div>
+        <div class="drow"><span class="k">핵심</span><span class="v">근거 스크립트 + 정확 렌더. 미디어 자산 소유. 승인 후 발행</span></div>
+      </div>
+      <div class="dcard c">
+        <h4>④ <span class="svc">publishing</span> — 발행</h4>
+        <div class="drow"><span class="k">서비스</span><span class="v"><code>publishing</code>(API)</span></div>
+        <div class="drow"><span class="k">저장</span><span class="v">Postgres <code>publishing_db</code></span></div>
+        <div class="drow"><span class="k">이벤트</span><span class="v">구독 <code>content.approved</code> / 발행 <code>content.published</code></span></div>
+        <div class="drow"><span class="k">핵심</span><span class="v">YouTube 업로드(커모디티). 승인 없이 업로드 금지</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 CROSS-CUTTING -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">06</span>
+      <h2>크로스커팅 제약</h2>
+      <p class="sec-sub">원형(py-msa-ai) 계승 + 정확성을 지키기 위한 규칙.</p>
+    </div>
+    <div class="cc-grid">
+      <div class="cc"><h4>단일 진입 · HMAC</h4><p>외부 요청은 <code>gateway</code>(:8080)만. 서비스 간 직접 호출은 HMAC 신뢰헤더로만.</p></div>
+      <div class="cc"><h4>서비스별 DB</h4><p>DB 공유 금지. 데이터는 API·Kafka로만. issue-detector도 스트림 구독(직접 접속 X).</p></div>
+      <div class="cc"><h4>Kafka 비동기 잡</h4><p>단계 결합은 이벤트. 조회성만 동기 API. 아웃박스(커밋 후 발행).</p></div>
+      <div class="cc"><h4>지식 = 그래프 + 사실 + 벡터</h4><p>관계·인과 = <code>Neo4j</code> 그래프(다홉 추론, 알파). 시세·기사 = Postgres SQL. 의미검색 = <code>pgvector</code> 보조.</p></div>
+      <div class="cc"><h4>east-west 직결</h4><p><code>agent</code> → <code>research/content /search</code> · <code>llm-inference</code>는 gateway 재진입 없이 HMAC 직결.</p></div>
+      <div class="cc"><h4>로컬 vs 외부</h4><p>텍스트·임베딩·차트 렌더 = 로컬(Ollama/ffmpeg). broll·TTS·업로드만 외부 API.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <div>CONVEY 아키텍처 레퍼런스 · 세부 도메인 설계는 <b style="color:var(--ink-soft)">/design</b> 커맨드로.</div>
+    <div class="paths">
+      <span><b>이 문서 = 아키텍처 시각 정본</b> · 텍스트 상세 doc/ref/architecture/01~04.md</span>
+      <span><b>경계</b> doc/ref/domains/ · doc/ref/glossary/terms.md</span>
+    </div>
+  </footer>
+</div>

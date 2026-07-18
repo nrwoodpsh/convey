@@ -1,0 +1,19 @@
+[project]
+name = "common"
+version = "0.1.0"
+description = "py-msa-ai-starter 공통 라이브러리 (설정·에러·보안·Kafka)"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "pyjwt>=2.8",
+    "aiokafka>=0.11",
+    "fastapi>=0.115",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["common*"]
