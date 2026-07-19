@@ -7,7 +7,7 @@ x-python-env: &python-env
 services:
   # ── 인프라 ────────────────────────────────────────────
   postgres:
-    image: pgvector/pgvector:pg16   # RAG 임베딩용 pgvector 포함
+    image: postgres:16   # 사실 저장(시세·기사·출처). 벡터 임베딩은 POC 제외(ADR 0006)
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
@@ -109,9 +109,9 @@ services:
       postgres: {condition: service_healthy}
       kafka: {condition: service_healthy}
 
-  # 리서치 소스 수집 워커 — HTTP 없음, Kafka로만 결합 (market-feed 원형 복제)
-  research-feed:
-    build: {context: ., dockerfile: services/research-feed/Dockerfile}
+  # 뉴스·RSS 수집 + 종목·사건 태깅 워커 — HTTP 없음, Kafka로만 결합 (market-feed 원형 복제·확장)
+  news-feed:
+    build: {context: ., dockerfile: services/news-feed/Dockerfile}
     <<: *python-env
     depends_on:
       kafka: {condition: service_healthy}
@@ -125,14 +125,6 @@ services:
       postgres: {condition: service_healthy}
       kafka: {condition: service_healthy}
       agent: {condition: service_started}
-
-  llm-trainer:
-    build: {context: ., dockerfile: services/llm-trainer/Dockerfile}
-    <<: *python-env
-    volumes:
-      - ./adapters:/app/adapters   # LoRA 어댑터 산출물
-    depends_on:
-      kafka: {condition: service_healthy}
 
   # 외부 연동 워커(예: KIS) — HTTP 없음, 게이트웨이 뒤 아님, Kafka로만 결합
   market-feed:

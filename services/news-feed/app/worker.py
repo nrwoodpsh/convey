@@ -1,7 +1,7 @@
-"""리서치 소스 수집 워커 — 주기적으로 피드/외부 API를 수집해 Kafka로 발행.
+"""뉴스·RSS 수집 + 종목·사건 태깅 워커 — 주기적으로 피드/외부 API를 수집해 Kafka로 발행.
 
-배포 형태 ②(워커): HTTP 없음, 게이트웨이 뒤 아님. research/content가 research.ingested를
-구독해 소비한다(이벤트 주도). market-feed 원형을 복제.
+배포 형태 ②(워커): HTTP 없음, 게이트웨이 뒤 아님. research/issue-detector가 research.ingested를
+구독해 소비한다(이벤트 주도). market-feed 원형을 복제·확장(종목·사건 태깅 추가).
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from app.config import settings
 from app.external_client import ResearchSourceClient
 
 configure_logging(settings.log_level)
-logger = logging.getLogger("research-feed")
+logger = logging.getLogger("news-feed")
 
 
 async def run() -> None:
@@ -26,7 +26,7 @@ async def run() -> None:
     producer = KafkaProducer(settings.kafka_bootstrap)
     await producer.start()
     logger.info(
-        "research-feed 시작 feeds=%s interval=%ss", len(feed_urls), settings.poll_interval_seconds
+        "news-feed 시작 feeds=%s interval=%ss", len(feed_urls), settings.poll_interval_seconds
     )
     try:
         while True:

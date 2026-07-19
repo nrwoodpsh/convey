@@ -3,6 +3,6 @@
 CREATE DATABASE auth_db;
 CREATE DATABASE sample_db;
 -- CONVEY 도메인 DB
-CREATE DATABASE research_db;
-CREATE DATABASE content_db;
+CREATE DATABASE research_db;   -- 시세·기사·출처(사실). 관계·인과는 Neo4j research_graph(round①)
+CREATE DATABASE content_db;    -- 잡·스크립트·자산·완성본 상태
 -- TODO(후속): CREATE DATABASE publishing_db;

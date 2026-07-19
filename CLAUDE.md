@@ -4,7 +4,7 @@
 
 - **프로젝트명**: CONVEY
 - **한 줄 정의**: **주식/시장 리서치를 유튜브 쇼츠(영상+이미지)로 바꾸는** 자동 파이프라인 (research → shorts). 한국어.
-- **기술 스택**: Python 3.11 MSA — FastAPI · Kafka(KRaft) · PostgreSQL(서비스별 DB, **pgvector 보조**) · **Neo4j(지식 그래프 — 종목·사건 관계·인과)** · Ollama(로컬 LLM·임베딩) · KIS OpenAPI(시세) · 외부 미디어 API(broll·TTS — 커모디티) · ffmpeg(차트·수치 렌더+합성) · SQLAlchemy · Alembic. API 전용(BE).
+- **기술 스택**: Python 3.11 MSA — FastAPI · Kafka(KRaft) · PostgreSQL(서비스별 DB — 시세·기사 사실) · **Neo4j(지식 그래프 — 종목·사건 관계·인과)** · Ollama(로컬 LLM) · KIS OpenAPI(시세) · 외부 미디어 API(broll·TTS — 커모디티) · ffmpeg(차트·수치 렌더+합성) · SQLAlchemy · Alembic. API 전용(BE). ※ RAG는 **GraphRAG+SQL**, 벡터(pgvector)는 POC 제외(ADR 0006).
 - **원형**: `py-msa-ai` (`nrwoodpsh/py-msa-ai-starter`) — 게이트웨이 단일 진입 + JWT 중앙검증 + HMAC 신뢰헤더 + 트랜잭션 아웃박스.
 - **주요 도메인(확정 — 3도메인)**: `research`(시세·뉴스를 **종목·사건 관계 그래프(Neo4j)+사실(Postgres)**로 저장) · `content`(스크립트·미디어 자산·완성본) · `publishing`(발행). 스크립트 생성은 `agent`, 이슈 선별은 `issue-detector`(컴포넌트), 정확 렌더+합성은 `video-assembly`, broll·TTS는 외주. 미디어 산출물 상태는 `content` 소유. ← `doc/ref/domains/`·`doc/ref/architecture/`.
 - **파이프라인 성격**: 원형(텍스트 LLM)에서 **멀티미디어(쇼츠) 파이프라인**으로 확장, **3단(축적→선별→제작)**. 발행 채널 **YouTube Shorts**. ← 전환 배경 `doc/decisions/`.
@@ -53,7 +53,7 @@
 - **`git push`·`merge`·`reset --hard`·`clean -f`·force-push 금지** — Claude는 실행하지 않는다. push·merge는 사람이 외부 툴로.
 - **민감 파일 커밋 금지** — `.env`, `*.key`, `*-prod.*` 등. (원형은 `.env.example`만 제공, `.env`는 사람이 생성)
 - **자동 커밋 금지** — 커밋은 사용자가 요청할 때 `/commit`으로만. `/sync` 등 다른 커맨드는 커밋하지 않는다.
-- **텍스트 LLM·임베딩은 로컬 Ollama만 — 외부 텍스트 LLM API 금지** — 리서치 원문·스크립트 등 텍스트 추론과 RAG 임베딩은 외부 LLM 서비스로 나가지 않도록 `llm-inference` → `ollama`(로컬)로만. 원문 데이터 보호가 목적.
+- **텍스트 LLM은 로컬 Ollama만 — 외부 텍스트 LLM API 금지** — 리서치 원문·스크립트 등 텍스트 추론은 외부 LLM 서비스로 나가지 않도록 `llm-inference` → `ollama`(로컬)로만. 원문 데이터 보호가 목적. (RAG는 GraphRAG+SQL이라 임베딩 없음; 후속 라운드에서 임베딩 도입 시에도 로컬 Ollama만.)
 - **미디어 생성은 외부 API 허용 (부패방지 계층 경유)** — 이미지·TTS·영상클립 생성은 외부 API를 쓸 수 있다. 단 호출은 반드시 래퍼 서비스(`image-gen`·`tts`·`video-clip`)의 부패방지 계층에 가두고, **원문 텍스트 전체를 외부로 넘기지 않는다**(생성에 필요한 프롬프트·에셋만). 영상합성은 로컬 ffmpeg(`video-assembly`).
 - **리서치 출처·저작권 메타 보존 필수** — 수집 원문은 출처 URL·라이선스 메타를 반드시 함께 저장. 무출처 콘텐츠 생성 금지. 미디어 자산도 생성 소스·라이선스 메타를 계승·기록.
 - **콘텐츠 자동 발행 금지 — 사람 승인** — 파이프라인은 완성본(쇼츠 mp4·이미지) 생성까지 전자동. 최종 발행(**YouTube Shorts** 업로드 등 외부)은 사람 승인 후에만.

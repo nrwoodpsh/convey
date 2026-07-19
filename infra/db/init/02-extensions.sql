@@ -1,7 +1,3 @@
--- pgvector 확장 — RAG 임베딩(분리 인덱스: research_db=원문, content_db=콘텐츠 히스토리)
--- pgvector/pgvector 이미지에 확장 바이너리가 포함됨. DB별로 CREATE EXTENSION 필요.
-\connect research_db
-CREATE EXTENSION IF NOT EXISTS vector;
-
-\connect content_db
-CREATE EXTENSION IF NOT EXISTS vector;
+-- Postgres 확장 — POC에서는 없음.
+-- 벡터 임베딩(pgvector)은 POC 범위에서 제외(ADR 0006 — RAG는 GraphRAG(Neo4j) + SQL 사실조회로).
+-- 의미검색(pgvector)이 필요해지는 후속 라운드에서 재도입 시 여기에 DB별 CREATE EXTENSION vector; 를 추가.

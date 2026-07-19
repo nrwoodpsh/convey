@@ -217,7 +217,7 @@
             <div class="own"></div>
             <div class="dbcol">
               <div class="db graph"><div class="svc">Neo4j</div><div class="role">지식 그래프 · 관계·인과</div></div>
-              <div class="db"><div class="svc">research_db</div><div class="role">Postgres · 시세·기사 +pgvector</div></div>
+              <div class="db"><div class="svc">research_db</div><div class="role">Postgres · 시세·기사(사실)</div></div>
             </div>
           </div>
           <div class="node alpha"><span class="tag a">★</span><div class="svc">issue-detector</div><div class="role">워커 · 두 토픽 구독<br>→ 이슈 종목 랭킹</div></div>
@@ -236,7 +236,7 @@
           <div class="group">
             <div class="node alpha"><span class="tag a">★</span><div class="svc">content</div><div class="role">API · 제작 총괄<br>잡 · consumer</div></div>
             <div class="own"></div>
-            <div class="db"><div class="svc">content_db</div><div class="role">+ pgvector 히스토리</div></div>
+            <div class="db"><div class="svc">content_db</div><div class="role">잡·스크립트·완성본</div></div>
           </div>
           <span class="arrow-h"><span class="l"></span><span class="h"></span></span>
           <div class="lanes">
@@ -301,10 +301,10 @@
           <tr><td class="svc">gateway</td><td>API</td><td>—</td><td>단일 진입 · JWT · HMAC 서명</td><td><span class="pill n">공통</span></td><td class="st2">유지</td></tr>
           <tr><td class="svc">auth</td><td>API</td><td>auth_db</td><td>JWT 발급(로그인)</td><td><span class="pill n">공통</span></td><td class="st2">유지</td></tr>
           <tr><td class="svc">market-feed</td><td>워커</td><td>—</td><td>KIS 시세 수집 → Kafka</td><td><span class="pill a">★ 소스</span></td><td class="st2">실사용 복귀</td></tr>
-          <tr><td class="svc">news-feed</td><td>워커</td><td>—</td><td>뉴스·RSS 수집 + 종목·사건 태깅</td><td><span class="pill a">★</span></td><td class="st2">research-feed 개명</td></tr>
-          <tr><td class="svc">research</td><td>API</td><td>Neo4j + research_db +pgvector</td><td>지식 그래프(관계·인과) + 시세·기사 사실 + 검색</td><td><span class="pill a">★ 심장</span></td><td class="st2">골격O · 그래프 추가</td></tr>
+          <tr><td class="svc">news-feed</td><td>워커</td><td>—</td><td>뉴스·RSS 수집 + 종목·사건 태깅</td><td><span class="pill a">★</span></td><td class="st2">research-feed 개명 완료</td></tr>
+          <tr><td class="svc">research</td><td>API</td><td>Neo4j + research_db</td><td>지식 그래프(관계·인과) + 시세·기사 사실 + 근거회수</td><td><span class="pill a">★ 심장</span></td><td class="st2">골격O · 그래프 추가(round①)</td></tr>
           <tr><td class="svc">issue-detector</td><td>워커</td><td>—</td><td>시세급변+뉴스빈도 → 이슈 종목 랭킹</td><td><span class="pill a">★</span></td><td class="st2">신규</td></tr>
-          <tr><td class="svc">content</td><td>API</td><td>content_db +pgvector</td><td>제작 총괄 · 잡 · consumer · 히스토리</td><td><span class="pill a">★</span></td><td class="st2">골격O</td></tr>
+          <tr><td class="svc">content</td><td>API</td><td>content_db</td><td>제작 총괄 · 잡 · consumer · 히스토리</td><td><span class="pill a">★</span></td><td class="st2">골격O</td></tr>
           <tr><td class="svc">agent</td><td>API</td><td>—</td><td>RAG 2곳 검색 → 근거 스크립트</td><td><span class="pill a">★</span></td><td class="st2">확장</td></tr>
           <tr><td class="svc">llm-inference</td><td>API</td><td>—</td><td>로컬 Ollama 창구</td><td><span class="pill n">공통</span></td><td class="st2">유지</td></tr>
           <tr><td class="svc">image-gen · tts</td><td>API/워커</td><td>—</td><td>broll 이미지 · TTS (외부 API 래퍼)</td><td><span class="pill c">외주</span></td><td class="st2">신규(얇게)</td></tr>
@@ -333,12 +333,12 @@
         </ul>
       </div>
       <div class="store">
-        <h4>Postgres · research_db +pgvector</h4>
-        <p class="sub">사실 — SQL 정확 조회 + 의미검색 보조</p>
+        <h4>Postgres · research_db</h4>
+        <p class="sub">사실 — SQL 정확 조회</p>
         <ul>
           <li><code>PriceTick</code> 시세 시계열 (차트·이슈감지)</li>
           <li><code>Article</code> 원문 + 출처·라이선스 (필수)</li>
-          <li><code>Embedding</code> pgvector (테마 의미검색 보조)</li>
+          <li>벡터 임베딩(pgvector)은 <strong>POC 제외</strong> (ADR 0006)</li>
         </ul>
       </div>
     </div>
@@ -384,7 +384,7 @@
       <div class="dcard a">
         <h4>① <span class="svc">research</span> — 축적</h4>
         <div class="drow"><span class="k">서비스</span><span class="v"><code>research</code>(API) · <code>market-feed</code> · <code>news-feed</code>(워커)</span></div>
-        <div class="drow"><span class="k">저장</span><span class="v">Neo4j 그래프 + Postgres <code>research_db</code>+pgvector</span></div>
+        <div class="drow"><span class="k">저장</span><span class="v">Neo4j 그래프(관계·인과) + Postgres <code>research_db</code>(사실)</span></div>
         <div class="drow"><span class="k">이벤트</span><span class="v">발행 <code>market.ticks</code>·<code>research.ingested</code></span></div>
         <div class="drow"><span class="k">핵심</span><span class="v">종목·사건 관계 축적. 출처·라이선스 필수. 자동 유발 X</span></div>
       </div>
@@ -398,7 +398,7 @@
       <div class="dcard a">
         <h4>③ <span class="svc">content</span> — 제작</h4>
         <div class="drow"><span class="k">서비스</span><span class="v"><code>content</code>·<code>agent</code>·<code>llm-inference</code>·<code>image-gen</code>·<code>tts</code>·<code>video-assembly</code></span></div>
-        <div class="drow"><span class="k">저장</span><span class="v">Postgres <code>content_db</code>+pgvector(히스토리)</span></div>
+        <div class="drow"><span class="k">저장</span><span class="v">Postgres <code>content_db</code>(잡·스크립트·완성본)</span></div>
         <div class="drow"><span class="k">이벤트</span><span class="v">자기큐 <code>content.generate</code> / fan-out 미디어 / 발행 <code>content.approved</code></span></div>
         <div class="drow"><span class="k">핵심</span><span class="v">근거 스크립트 + 정확 렌더. 미디어 자산 소유. 승인 후 발행</span></div>
       </div>
@@ -423,9 +423,9 @@
       <div class="cc"><h4>단일 진입 · HMAC</h4><p>외부 요청은 <code>gateway</code>(:8080)만. 서비스 간 직접 호출은 HMAC 신뢰헤더로만.</p></div>
       <div class="cc"><h4>서비스별 DB</h4><p>DB 공유 금지. 데이터는 API·Kafka로만. issue-detector도 스트림 구독(직접 접속 X).</p></div>
       <div class="cc"><h4>Kafka 비동기 잡</h4><p>단계 결합은 이벤트. 조회성만 동기 API. 아웃박스(커밋 후 발행).</p></div>
-      <div class="cc"><h4>지식 = 그래프 + 사실 + 벡터</h4><p>관계·인과 = <code>Neo4j</code> 그래프(다홉 추론, 알파). 시세·기사 = Postgres SQL. 의미검색 = <code>pgvector</code> 보조.</p></div>
+      <div class="cc"><h4>지식 = 그래프 + 사실 (GraphRAG)</h4><p>관계·인과 = <code>Neo4j</code> 그래프(다홉 추론, 알파). 시세·기사 = Postgres SQL. 회수 = <strong>GraphRAG+SQL</strong>. 벡터(pgvector)는 POC 제외(ADR 0006).</p></div>
       <div class="cc"><h4>east-west 직결</h4><p><code>agent</code> → <code>research/content /search</code> · <code>llm-inference</code>는 gateway 재진입 없이 HMAC 직결.</p></div>
-      <div class="cc"><h4>로컬 vs 외부</h4><p>텍스트·임베딩·차트 렌더 = 로컬(Ollama/ffmpeg). broll·TTS·업로드만 외부 API.</p></div>
+      <div class="cc"><h4>로컬 vs 외부</h4><p>텍스트·차트/수치 렌더 = 로컬(Ollama/ffmpeg). broll·TTS·업로드만 외부 API. 생성형 영상은 POC 제외.</p></div>
     </div>
   </section>
 

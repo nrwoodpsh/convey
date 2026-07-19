@@ -6,12 +6,11 @@ from common.config import BaseAppSettings
 class Settings(BaseAppSettings):
     database_url: str = "postgresql+asyncpg://app:app@postgres:5432/research_db"
 
-    # 발행: 소스 원문 수집 완료 → content/agent 구독
+    # 발행: 소스 원문 수집 완료 → issue-detector/content 구독
     topic_ingested: str = "research.ingested"
 
-    # RAG 임베딩 (로컬 Ollama만 — 외부 텍스트 LLM 금지)
-    embedding_model: str = "nomic-embed-text"
-    embedding_url: str = "http://llm-inference:8000"  # /embeddings 위임 (TODO(/design))
+    # 지식 그래프 — 관계·인과(Neo4j). round①에서 드라이버 연결 (ADR 0005)
+    # neo4j_url: str = "bolt://neo4j:7687"  # TODO(round① /builder)
 
 
 settings = Settings()

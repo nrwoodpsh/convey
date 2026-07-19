@@ -11,9 +11,10 @@ class Settings(BaseAppSettings):
     # 에이전트 루프 상한 — LLM 호출 횟수가 곧 비용이므로 반드시 상한을 둔다.
     max_steps: int = 5
 
-    # RAG(선택) — 벡터DB 붙일 때 사용
-    embedding_model: str = "nomic-embed-text"
-    vector_top_k: int = 4
+    # 근거 회수(RAG) — research/content의 /search를 east-west 호출(GraphRAG+SQL, 벡터 아님)
+    research_url: str = "http://research:8000"
+    content_url: str = "http://content:8000"
+    retrieval_top_k: int = 4
 
 
 settings = Settings()

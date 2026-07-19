@@ -1,17 +1,13 @@
 [project]
 name = "agent-service"
 version = "0.1.0"
-description = "AI 에이전트 서비스 (오케스트레이션: prompts + tools + RAG + 멀티턴 루프). LLM은 llm-inference에 위임."
+description = "AI 에이전트 서비스 (오케스트레이션: prompts + tools + 근거회수 + 멀티턴 루프). LLM은 llm-inference에 위임."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
-    "httpx>=0.27",
+    "httpx>=0.27",   # research/content /search east-west 호출(근거 회수)
     "common",
-    # RAG용(선택) — 실제 벡터검색 붙일 때 활성화:
-    # "numpy>=1.26",              # 임베딩 벡터 연산
-    # "pgvector>=0.3",           # postgres 벡터 확장 사용 시
-    # "qdrant-client>=1.9",      # 또는 전용 벡터DB 사용 시
 ]
 
 [build-system]

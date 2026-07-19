@@ -5,12 +5,12 @@ from pydantic import BaseModel
 
 
 class SearchHit(BaseModel):
-    """agent RAG 검색 결과 1건. TODO(/design): score·source_url·chunk 등 확정."""
+    """agent 근거 회수 결과 1건(GraphRAG+SQL). TODO(/design): 관계경로·source_url 등 확정."""
 
-    document_id: int
+    article_id: int
     text: str
     source_url: str
-    score: float
+    relevance: float
 
 
 class SearchResponse(BaseModel):

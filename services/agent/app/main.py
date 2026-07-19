@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.agent = AgentLoop(
         llm=app.state.llm,
         memory=Memory(),
-        retriever=None,  # RAG 붙일 때 Retriever(Embedder(...), settings.vector_top_k) 주입
+        retriever=None,  # 근거 회수 붙일 때 Retriever(research_url, content_url, retrieval_top_k) 주입
         max_steps=settings.max_steps,
     )
     try:

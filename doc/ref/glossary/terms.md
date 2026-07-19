@@ -11,11 +11,12 @@
 | 기사 | article | 수집 원문 + 출처 URL·라이선스 | 반드시 출처·라이선스 동반(무출처 생성 금지) |
 | 시세 | price / tick | 종목 시세 스냅샷(차트·이슈감지용) | KIS 등 외부 소스 |
 | 이슈 종목 | issue stock | 그날 뜨는 종목(급등락+뉴스 빈도) | `issue-detector` 산출 |
-| 임베딩 | embedding | 기사 텍스트를 벡터로(로컬 `nomic-embed-text`), pgvector 저장 | **의미검색 보조**. 정확 조회는 SQL |
+| 임베딩 | embedding | 기사 텍스트를 벡터로. 의미검색용 | **POC 제외·보류**(ADR 0006). POC는 GraphRAG+SQL |
 | 지식 그래프 | knowledge graph | 종목·사건·섹터를 노드, 관계·인과를 엣지로 저장(Neo4j) | 알파① 엔진. 관계형 조인과 달리 다홉 추론 |
 | 노드 · 엣지 | node · edge | 노드=Stock·Event·Sector, 엣지=AFFECTS·SUPPLIES·COMPETES | 엣지 = 인과·수혜·경쟁 |
 | 추출 | extraction | 뉴스 → 엔티티(NER)+관계추출 → 그래프 엣지 | 품질의 원천. news-feed+research |
-| RAG | rag / retrieval | 그래프 traversal(관계) + 사실/벡터 회수를 합쳐 프롬프트에 주입 | 검색은 `agent`가 `/search`로, 저장은 `research` |
+| RAG | rag / retrieval | 그래프 traversal(관계) + SQL 사실 회수를 합쳐 프롬프트에 주입(**GraphRAG**) | 벡터 유사도 아님(POC). 검색은 `agent`가 `/search`로, 저장은 `research` |
+| GraphRAG | graph rag | 벡터 대신 **그래프 순회(Cypher)+SQL**로 근거를 회수하는 RAG | CONVEY의 회수 방식(ADR 0006) |
 
 ## 콘텐츠 (content)
 
@@ -51,7 +52,8 @@
 
 | 용어 | 영문/코드 | 정의 | 혼동 주의 |
 |:---|:---|:---|:---|
-| 알파 | alpha | 방어가능한 차별점(정확·선별·렌더·양산) | 투자 우선순위 근거(ADR 0004) |
+| 알파 | alpha | 방어가능한 **차별점**(정확·선별·렌더·양산) | 투자 우선순위 근거(ADR 0004). ≠ POC |
+| POC/MVP | poc / mvp | 처음 최소로 만들어 증명하는 **범위** | 알파는 그 안에 박힌 알맹이(축≠). ADR 0006 |
 | 커모디티 | commodity | 외부가 이미 잘하는 것(broll·TTS·스티칭·업로드) | 외부 API로 얇게 |
 | 아웃박스 | outbox | 트랜잭션 커밋 후 이벤트 발행 보장 | 원형 계승(간이) |
 | 신뢰헤더 | HMAC trust header | 서비스 간 직접 호출 인증 | ≠ JWT(외부 진입용) |

@@ -1,7 +1,7 @@
 [project]
 name = "research-service"
 version = "0.1.0"
-description = "리서치 소스·원문·pgvector 임베딩 (FastAPI + SQLAlchemy + Kafka). RAG 검색 API 제공."
+description = "리서치 — 시세·기사 사실(Postgres) + 관계·인과 그래프(Neo4j). 근거 회수 API(GraphRAG+SQL) 제공."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
@@ -9,7 +9,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0",
     "asyncpg>=0.29",
     "alembic>=1.13",
-    "pgvector>=0.3",  # SQLAlchemy Vector 타입
+    # "neo4j>=5.0",  # 지식 그래프 드라이버 — round①에서 활성화 (ADR 0005)
     "common",
 ]
 

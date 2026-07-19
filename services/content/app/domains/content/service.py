@@ -2,7 +2,7 @@
 
 책임: 생성 잡 시작·단계 상태 관리, agent 스크립트 호출, 미디어 fan-out 발행,
       합성 완료 수신 → content.ready, 사람 승인 → content.approved,
-      콘텐츠 히스토리 RAG 검색(분리 인덱스). TODO(/design): 흐름·상태머신 확정.
+      콘텐츠 히스토리 조회(중복회피 — 키워드/메타). TODO(/design): 흐름·상태머신 확정.
 """
 from __future__ import annotations
 

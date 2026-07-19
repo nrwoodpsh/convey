@@ -21,9 +21,5 @@ class Settings(BaseAppSettings):
     # agent(스크립트 생성) east-west 호출
     agent_url: str = "http://agent:8000"
 
-    # 콘텐츠 히스토리 RAG (분리 인덱스 — content_db pgvector)
-    embedding_model: str = "nomic-embed-text"
-    embedding_url: str = "http://llm-inference:8000"
-
 
 settings = Settings()

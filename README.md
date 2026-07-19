@@ -1,6 +1,6 @@
 # CONVEY
 
-**주식/시장 리서치를 유튜브 쇼츠로 바꾸는 자동 파이프라인** (한국어) — Python MSA (FastAPI · Kafka · Neo4j · PostgreSQL/pgvector · Ollama · ffmpeg).
+**주식/시장 리서치를 유튜브 쇼츠로 바꾸는 자동 파이프라인** (한국어) — Python MSA (FastAPI · Kafka · Neo4j · PostgreSQL · Ollama · ffmpeg).
 
 > 원형: `py-msa-ai` (`nrwoodpsh/py-msa-ai-starter`)에서 복제. **정본**은 `CLAUDE.md`(정체성·가드레일) · `doc/ref/`(아키텍처·도메인·용어) · `doc/decisions/`(ADR). 이 README는 개요·기동·컴포넌트 추가 가이드.
 >
@@ -17,7 +17,7 @@
 
 1. **근거 있는 정확한 정보** — 주가·실적·이벤트를 환각 없이 출처와 함께. "안 틀리는 금융 콘텐츠".
 2. **이슈 종목 자동 선별** — "오늘 뭘 만들지"를 시세 급변 + 뉴스 빈도로 자동 포착.
-3. **정확한 차트·수치 렌더링** — 생성형 영상툴이 못하는 정확한 종가·등락률·차트를 영상에 박기.
+3. **정확한 차트·수치 렌더링** — 생성형 영상툴이 못하는 정확한 종가·등락률·차트를 영상에 박기(화면 위 픽셀은 우리가 결정론적 렌더·합성; 생성형 영상은 POC 제외 — ADR 0006).
 4. **자동화·양산** — 일관 포맷으로 하루 N개 안정 양산.
 
 커모디티(일반 대본 문장·broll·TTS·영상 스티칭·YouTube 업로드)는 외부 API로 얇게 외주. ← 정본 `doc/decisions/0004-product-alpha.md`.
@@ -46,14 +46,14 @@
 
 ```
 convey/
-├─ docker-compose.yml       # Kafka(KRaft)·Postgres(pgvector)·Neo4j·Ollama·게이트웨이·서비스
+├─ docker-compose.yml       # Kafka(KRaft)·Postgres·Ollama·게이트웨이·서비스 (Neo4j는 round①)
 ├─ libs/common/             # [lib] 공통: 설정·에러스키마·JWT/HMAC·Kafka 유틸
 ├─ gateway/                 # 단일 진입(JWT 검증 + HMAC 신뢰헤더 + 프록시)
 ├─ services/
 │  ├─ auth/                 # [API] JWT 발급(로그인)
 │  ├─ market-feed/          # [워커] KIS 시세 → Kafka                      · 원형 실사용
-│  ├─ news-feed/            # [워커] 뉴스·RSS 수집 + 종목·사건 태깅         · research-feed 개명(예정)
-│  ├─ research/             # [API] Neo4j 지식그래프 + Postgres 사실 + /search · 골격O
+│  ├─ news-feed/            # [워커] 뉴스·RSS 수집 + 종목·사건 태깅         · research-feed 개명 완료
+│  ├─ research/             # [API] Neo4j 지식그래프 + Postgres 사실 + /search(GraphRAG) · 골격O
 │  ├─ issue-detector/       # [워커] 이슈 종목 랭킹                         · 신규(예정)
 │  ├─ content/              # [API] 제작 잡·스크립트·미디어 자산·승인        · 골격O
 │  ├─ agent/                # [API] 근거 스크립트(RAG 2곳) → llm-inference   · 확장
@@ -61,10 +61,10 @@ convey/
 │  ├─ image-gen/ · tts/     # [워커] broll·TTS 외부 API 래퍼(커모디티)       · 신규(예정)
 │  ├─ video-assembly/       # [워커] 차트·수치 렌더 + ffmpeg 합성            · 신규(예정)
 │  └─ publishing/           # [API] YouTube 업로드·발행 승인                 · 신규(예정)
-└─ infra/db/init/           # 서비스별 DB 생성 + pgvector 확장
+└─ infra/db/init/           # 서비스별 DB 생성 (벡터 확장은 POC 제외 — ADR 0006)
 ```
 
-> **구현 순서**는 `doc/design/README.md`의 빌드 ①~⑤(데이터 기반 → 선별 → 스크립트 → 렌더 → 양산). 현재는 `research`·`content` 골격과 인프라 배선까지. `llm-trainer`(원형 LoRA 트레이너)는 **제거**(톤은 moat가 아님 — ADR 0004).
+> **구현 순서**는 `doc/design/README.md`의 빌드 ①~⑤(데이터 기반 → 선별 → 스크립트 → 렌더 → 양산). 현재는 `research`·`content` 골격과 인프라 연동까지. `llm-trainer`(원형 LoRA 트레이너)는 **제거 완료**(톤은 moat가 아님 — ADR 0004).
 
 ### 배포 형태 3종
 
@@ -76,16 +76,17 @@ convey/
 
 ## 저장 — 하이브리드
 
-LoRA(모델 튜닝)를 쓰지 않으므로 콘텐츠 품질의 유일한 레버는 **지식 레이어**다. 그래서 관계·인과를 그래프로 담는다(ADR 0005).
+LoRA(모델 튜닝)를 쓰지 않으므로 콘텐츠 품질의 유일한 레버는 **지식 레이어**다. 그래서 관계·인과를 그래프로 담는다(ADR 0005). **RAG는 벡터가 아니라 GraphRAG+SQL**(벡터/pgvector는 POC 제외 — ADR 0006).
 
 | 저장소 | 소유 | 담는 것 | 역할 |
 |:---|:---|:---|:---|
 | **Neo4j** (`research_graph`) | `research` | 노드(Stock·Event·Sector) + 엣지(AFFECTS·SUPPLIES·COMPETES) | 관계·인과 **다홉 추론** = 알파① |
-| **Postgres** (`research_db` +pgvector) | `research` | 시세(PriceTick)·기사(Article+출처)·임베딩 | 사실 SQL 정확 조회 + 의미검색 보조 |
-| **Postgres** (`content_db` +pgvector) | `content` | 잡·스크립트·자산·완성본·히스토리 임베딩 | 제작 상태 + 콘텐츠 히스토리 RAG |
+| **Postgres** (`research_db`) | `research` | 시세(PriceTick)·기사(Article+출처) | 사실 SQL 정확 조회 |
+| **Postgres** (`content_db`) | `content` | 잡·스크립트·자산·완성본 상태 | 제작 상태. 히스토리 중복회피=키워드/메타 |
 | **Postgres** (`auth_db`) | `auth` | 계정 | 인증 |
 
 > 진짜 일 = **추출 파이프라인**(뉴스 → NER + 관계추출 → 그래프 엣지). 여기가 품질의 원천.
+> 벡터 의미검색(pgvector)은 POC 제외·보류. 필요해지면 Postgres 위에 분리 기능으로 재도입(ADR 0006).
 
 ## 빠른 시작
 
@@ -96,7 +97,6 @@ curl http://localhost:8080/health
 
 # Ollama 모델 준비(런타임 1회 — 이미지 미포함)
 docker compose exec ollama ollama pull llama3.2          # 스크립트 생성(한국어 모델 검토)
-docker compose exec ollama ollama pull nomic-embed-text  # 임베딩(보조)
 
 # 로그인 → 토큰
 curl -s -X POST http://localhost:8080/auth/login \
@@ -112,7 +112,7 @@ curl -s -X POST http://localhost:8080/auth/login \
 | gateway | 8080→8000 | 외부 | | `market.ticks` | market-feed → research·issue-detector |
 | ollama | 11434 | 외부 | | `research.ingested` | news-feed → research·issue-detector (축적) |
 | neo4j | 7474·7687 | 개발 | | `content.generate` | content(on-demand) → content consumer |
-| postgres(+pgvector) | 5432 | 개발 | | `image.generate`·`tts.generate` | content → 미디어(외주) |
+| postgres | 5432 | 개발 | | `image.generate`·`tts.generate` | content → 미디어(외주) |
 | kafka-ui | 8090 | 관측 | | `content.approved` | 사람 승인 → publishing |
 | | | | | `content.published` | publishing → (관측) |
 
@@ -137,7 +137,7 @@ curl -s -X POST http://localhost:8080/auth/login \
 1. **폴더**(기존 `services/research`·`content` 복사): `app/{__init__,main,config,db}.py` + `app/domains/<domain>/{router,service,repository,models,schemas}.py`.
 2. **`docker-compose.yml`** 서비스 블록 추가 (build·`<<: *python-env`·`DATABASE_URL`·`depends_on`).
 3. **`gateway/app/config.py`** routes에 `"/<name>": "http://<name>:8000"` 등록 (필수 — 안 하면 404).
-4. **DB 필요 시** `infra/db/init/01-create-databases.sql`에 `CREATE DATABASE <name>_db;` (+ pgvector 필요 시 `02-extensions.sql`).
+4. **DB 필요 시** `infra/db/init/01-create-databases.sql`에 `CREATE DATABASE <name>_db;` (벡터 확장은 POC 제외 — ADR 0006).
 
 ### ② 워커/데몬 (외부 연동·백그라운드)
 
@@ -152,7 +152,7 @@ curl -s -X POST http://localhost:8080/auth/login \
 ## 가드레일
 
 절대 금지(발췌 — 정본 `CLAUDE.md §4`):
-- **텍스트 LLM·임베딩은 로컬 Ollama만** — 외부 텍스트 LLM 금지(원문 보호). 미디어 생성만 외부 API 허용(부패방지 계층).
+- **텍스트 LLM은 로컬 Ollama만** — 외부 텍스트 LLM 금지(원문 보호). 미디어 생성만 외부 API 허용(부패방지 계층).
 - **리서치 출처·라이선스 메타 보존 필수** — 무출처 콘텐츠 생성 금지. 스크립트의 모든 수치는 출처에 못박음.
 - **콘텐츠 자동 발행 금지 — 사람 승인** — YouTube 업로드는 승인 후에만.
 - **운영 DB 직접 접속 · `git push`/`merge` · 민감 파일 커밋 · 자동 커밋 금지.**
