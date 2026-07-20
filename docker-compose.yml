@@ -135,6 +135,13 @@ services:
     depends_on:
       kafka: {condition: service_healthy}
 
+  # 정확 차트·수치 렌더 + ffmpeg 합성 → mp4. 알파3 (라운드④)
+  video-assembly:
+    build: {context: ., dockerfile: services/video-assembly/Dockerfile}
+    <<: *python-env
+    depends_on:
+      kafka: {condition: service_healthy}
+
   content:
     build: {context: ., dockerfile: services/content/Dockerfile}
     <<: *python-env

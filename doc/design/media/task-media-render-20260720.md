@@ -49,3 +49,4 @@
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
 | 20260720 | /design | 최초 설계 — 정확 렌더 자체·커모디티 외주, 생성형영상 제외 (알파3) |
+| 20260720 | /builder | 정확 차트·수치 렌더(`render.py`, matplotlib) + ffmpeg 합성(`assemble.py`) — 알파3. 단위 2 pass(수치 포맷 정확·실 PNG 시그니처)·mypy clean. **실 렌더+ffmpeg 검증**: PNG(21KB)→h264 1080×1920 mp4. Dockerfile에 ffmpeg·fonts-nanum. **남음**: image-gen·tts(외부 API 커모디티), content fan-out join 오케스트레이션. 한글 폰트는 컨테이너(fonts-nanum)에서 해결(로컬은 tofu) |
