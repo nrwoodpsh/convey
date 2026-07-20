@@ -1,18 +1,36 @@
-"""content 도메인 Pydantic 스키마. TODO(/design): 필드 확정."""
+"""content 도메인 Pydantic 스키마 — 계약(api-contract.py)과 정합."""
 from __future__ import annotations
 
-from pydantic import BaseModel
+from enum import Enum
+
+from pydantic import BaseModel, Field
 
 
 class GenerateRequest(BaseModel):
-    """on-demand 생성 요청. TODO(/design): 주제·소스 범위·콘텐츠 유형 등 확정."""
+    topic: str = Field(min_length=1, max_length=200)
+    ticker: str | None = None
+    issue_ref: str | None = Field(default=None, description="issue-detector 랭킹 참조(선택)")
 
-    topic: str
+
+class JobStatus(str, Enum):
+    PENDING = "pending"
+    SCRIPTING = "scripting"
+    MEDIA = "media"
+    ASSEMBLING = "assembling"
+    READY = "ready"
+    APPROVED = "approved"
+    FAILED = "failed"
+
+
+class JobRes(BaseModel):
+    job_id: int
+    status: str
+    script_id: int | None = None
+    content_id: int | None = None
+    error: str | None = None
 
 
 class SearchHit(BaseModel):
-    """콘텐츠 히스토리 RAG 검색 결과 1건."""
-
     content_id: int
     text: str
     score: float

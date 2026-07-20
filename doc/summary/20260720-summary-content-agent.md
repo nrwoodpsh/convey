@@ -11,6 +11,7 @@
 ## 변경사항 (BE)
 
 - `services/agent/app/script/builder.py` — `build_script(topic, price, facts, llm)` → `Script`(sections + citations). `PriceEvidence`·`FactEvidence` TypedDict, `Citation`(출처 결속)
+- `services/content/app/domains/content/{models,schemas,service,router}.py` — `GenerationJob` 상태머신 + `start_generation`·`get_job`·`approve`(ready만), `GET /jobs/{id}`·`POST /jobs/{id}/approve`
 
 ## 검증
 
@@ -20,8 +21,10 @@
   - hook은 LLM prose(수치 슬롯 없음)
 - mypy --strict clean
 - **실 Ollama qwen3:14b 라이브**: hook=prose, 수치=데이터(71900/2.34), 인용 출처 동반
+- **실 content_db**: 잡 생성(pending)+content.generate 발행 · 미승인 approve **409 차단** · ready→approved+content.approved
 
 ## 특이사항 (후속)
 
-- **남음**: content 잡 상태머신(`GenerationJob`)·`POST /content/generate`·`GET /content/jobs/{id}`·`POST /content/{id}/approve`·consumer(잡 진행), agent `retriever`를 research/content `/search` HTTP로 배선(라운드①의 GraphRAG `/search`를 근거로).
+- **남음**: content consumer(content.generate 픽업→잡 진행→agent 스크립트→미디어 fan-out), agent `retriever`를 research `/search` HTTP로 배선(라운드①의 GraphRAG). Kafka·agent·research 서비스 기동 시 e2e.
+- 잡 상태머신·엔드포인트·근거 스크립트 빌더는 완료·검증됨.
 - 도입 prose 프롬프트는 튜닝 여지("쇼츠 도입"을 종목별로 더 정확히). 수치 정확성(핵심)은 데이터 슬롯이라 불변.

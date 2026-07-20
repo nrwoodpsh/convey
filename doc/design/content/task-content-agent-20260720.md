@@ -51,4 +51,5 @@
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
 | 20260720 | /design | 최초 설계 — 템플릿+사실슬롯 스크립트, HTTP 근거회수 (알파1) |
-| 20260720 | /builder | agent 근거 스크립트 빌더(`build_script`) — 수치는 사실 슬롯(PriceEvidence)에서만, LLM은 연결문장만(환각 물리 차단, AC2·AC5). 결정론 단위 3 pass(LLM 거짓숫자 무시·모든 인용 출처 결속)·mypy clean·**실 Ollama 라이브**. **남음**: content 잡 상태머신·`/generate`·`/jobs`·`/approve`·consumer, agent retriever HTTP 배선(research /search) |
+| 20260720 | /builder | agent 근거 스크립트 빌더(`build_script`) — 수치는 사실 슬롯(PriceEvidence)에서만, LLM은 연결문장만(환각 물리 차단, AC2·AC5). 결정론 단위 3 pass(LLM 거짓숫자 무시·모든 인용 출처 결속)·mypy clean·**실 Ollama 라이브**. |
+| 20260720 | /builder | content 잡 상태머신 — `GenerationJob` + `start_generation`(pending→content.generate 발행)·`get_job`·`approve`(**ready만** approved→content.approved, 사람 승인 가드레일). `GET /jobs/{id}`·`POST /jobs/{id}/approve`. **실 content_db 검증**(생성·미승인 approve 409·승인 흐름 — AC3)·mypy clean. **남음**: consumer(잡 진행→agent 스크립트→미디어), agent retriever HTTP 배선(research /search) |
