@@ -35,6 +35,7 @@
 - **실 research_db**: fact_search 매칭·출처 동반·무관 제외
 - **실 PG+Neo4j**: `/research/search` 조립 — facts(사실)+relations(관계) **모두 출처 동반**(GraphRAG)
 - **실 PG+Neo4j+Ollama**: `handle_ingested` — 이벤트 1건 → Article 저장 + LLM 관계추출 + 그래프 upsert(근거 결속)
+- **실 RSS e2e**(ADR 0008): 연합뉴스/한경 공개 RSS(feedparser) → 태깅 → 실 Kafka → research 저장(research_db). DART 클라이언트는 무료키 필요(구조만)
 
 ## 특이사항 (남은 작업·후속)
 

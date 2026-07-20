@@ -4,15 +4,14 @@ from common.config import BaseAppSettings
 
 
 class Settings(BaseAppSettings):
-    # 발행: 수집 원문 → research/content 구독
+    # 발행: 수집 원문 → research/issue-detector 구독
     topic_ingested: str = "research.ingested"
 
-    poll_interval_seconds: float = 300.0  # 피드 폴링 주기 (TODO(/design): 소스별로 확정)
+    poll_interval_seconds: float = 300.0  # 피드 폴링 주기
 
-    # 리서치 소스 — TODO(/design): RSS 피드 URL 목록 + 외부 API 설정
-    feed_urls: str = ""  # CSV of RSS/Atom feed URLs
-    external_base_url: str = ""
-    external_api_key: str = ""
+    # 소스 (ADR 0008): 공개 뉴스 RSS(키 없음) CSV + DART 공시(무료 키)
+    feed_urls: str = "https://www.yna.co.kr/rss/economy.xml,https://www.hankyung.com/feed/economy"
+    dart_api_key: str = ""  # opendart.fss.or.kr 발급(무료). 없으면 공시 스킵
 
 
 settings = Settings()

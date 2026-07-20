@@ -1,23 +1,79 @@
-"""리서치 소스 클라이언트 (부패방지 계층).
+"""뉴스·공시 소스 클라이언트 (부패방지 계층) — RSS(무료)·DART(공시, 무료키). ADR 0008.
 
-RSS/뉴스 피드 + 외부 리서치 API를 여기서만 호출하고, 외부 스키마를 내부 표준
-형태(원문+출처 URL·라이선스 메타)로 변환해 격리한다. market-feed의 패턴을 따른다.
-
-⚠️ 지금은 stub. TODO(/builder):
-  - RSS: feedparser 또는 httpx로 피드 파싱 → 항목별 원문·링크·published
-  - 외부 API: httpx.AsyncClient + 인증(api_key)
-  - 출처 URL·라이선스 메타는 반드시 함께 반환(가드레일).
+외부 스키마를 내부 표준 `{title, body, source_url, license, published_at}`로 변환·격리한다.
+가드레일: 출처 URL·라이선스 메타 필수 동반.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from typing import Any
 
-class ResearchSourceClient:
-    def __init__(self, feed_urls: list[str], base_url: str = "", api_key: str = "") -> None:
+import feedparser
+import httpx
+
+
+def _entry_ts(entry: Any) -> str:
+    parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+    if parsed:
+        return datetime(
+            parsed[0], parsed[1], parsed[2], parsed[3], parsed[4], parsed[5], tzinfo=timezone.utc
+        ).isoformat()
+    return datetime.now(timezone.utc).isoformat()
+
+
+class RssClient:
+    """공개 뉴스 RSS 수집(키 없음)."""
+
+    def __init__(self, feed_urls: list[str]) -> None:
         self._feed_urls = feed_urls
-        self._base_url = base_url
+
+    def fetch(self, limit_per_feed: int = 10) -> list[dict[str, Any]]:
+        docs: list[dict[str, Any]] = []
+        for url in self._feed_urls:
+            parsed = feedparser.parse(url)
+            for entry in parsed.entries[:limit_per_feed]:
+                link = str(entry.get("link", ""))
+                if not link:
+                    continue  # 가드레일: 출처 없는 항목 제외
+                docs.append({
+                    "title": str(entry.get("title", "")),
+                    "body": str(entry.get("summary", entry.get("description", ""))),
+                    "source_url": link,
+                    "license": "RSS",
+                    "published_at": _entry_ts(entry),
+                })
+        return docs
+
+
+def _dart_ts(yyyymmdd: str) -> str:
+    if len(yyyymmdd) == 8 and yyyymmdd.isdigit():
+        return f"{yyyymmdd[:4]}-{yyyymmdd[4:6]}-{yyyymmdd[6:]}T00:00:00+00:00"
+    return datetime.now(timezone.utc).isoformat()
+
+
+class DartClient:
+    """DART 공시(opendart.fss.or.kr) — 무료 API 키 필요. 공시=Article/Event로 흡수(ADR 0008)."""
+
+    def __init__(self, api_key: str = "") -> None:
         self._api_key = api_key
 
-    async def fetch_new_documents(self) -> list[dict]:
-        """신규 원문 수집 (stub). 반환 항목: {title, body, source_url, license, published}."""
-        # TODO(/builder): RSS/외부 API 실제 수집으로 교체
-        return []
+    def fetch_recent(self, page_count: int = 20) -> list[dict[str, Any]]:
+        if not self._api_key:
+            return []  # 키 없으면 스킵 — opendart 발급 후 활성화
+        resp = httpx.get(
+            "https://opendart.fss.or.kr/api/list.json",
+            params={"crtfc_key": self._api_key, "page_count": page_count},
+            timeout=30,
+        )
+        data = resp.json()
+        docs: list[dict[str, Any]] = []
+        for item in data.get("list", []):
+            rcept = item.get("rcept_no", "")
+            docs.append({
+                "title": f"{item.get('corp_name', '')} {item.get('report_nm', '')}".strip(),
+                "body": str(item.get("report_nm", "")),
+                "source_url": f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={rcept}",
+                "license": "DART",
+                "published_at": _dart_ts(str(item.get("rcept_dt", ""))),
+            })
+        return docs

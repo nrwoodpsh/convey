@@ -89,3 +89,4 @@
 | 20260720 | /builder(리뷰 M2) | `/search`에 계약 파라미터 `hops`(다홉 — Neo4j 가변길이 `*1..hops`, 정수 화이트리스트)·`window_days`(사실 기간 필터) 노출·적용. 실 Neo4j+PG 검증(hops=2 관계 회수, 출처 동반). |
 | 20260720 | /builder(전송 e2e) | Kafka 외부 리스너(compose `PLAINTEXT_HOST`=localhost:29092) 추가. **실 Kafka 파이프라인 관통 검증**: produce `research.ingested` → consume → `handle_ingested`(Article 저장 + LLM 관계추출 + 그래프). 전송 계층 "미검증" 해소. |
 | 20260720 | /design(ADR 0008) | 소스 재편 — 시세 **pykrx**(무료·키X), 콘텐츠 **뉴스(RSS)·공시(DART)·거시(ECOS/FRED)**. 계약에 `MacroIndicator`(거시 사실) 추가, 공시=Article/Event 흡수. KIS 제외. |
+| 20260720 | /builder(C) | news-feed **실 RSS 수집**(feedparser) + DART 클라이언트(무료키 필요·없으면 스킵) → 규칙 태깅 → `research.ingested`. **실 연합뉴스/한경 RSS → Kafka → research 저장 e2e 검증**("이해진…젠슨황" 기사에 네이버 035420 자동태깅, research_db Article 누적). mypy clean. 남음: DART 키·pykrx 시세·거시(ECOS/FRED). |
