@@ -88,3 +88,4 @@
 | 20260720 | /builder · Deviation | 계약 `ResearchIngestedEvent`: `article_id` → **`title·body·entities`**로 정합. 사유: 원문 없으면 research가 Article 저장·추출 불가 / 태깅은 코드(005930)인데 추출은 이름(삼성전자) 필요 → `entities`(이름) 추가. contract-gate 통과. **전송 계층**(Kafka 루프·llm-inference HMAC)은 표준 배선이나 **e2e 미검증**(Kafka 호스트노출·llm-inference 컨테이너 필요). 노드는 generic `Entity`(타입노드 후속) |
 | 20260720 | /builder(리뷰 M2) | `/search`에 계약 파라미터 `hops`(다홉 — Neo4j 가변길이 `*1..hops`, 정수 화이트리스트)·`window_days`(사실 기간 필터) 노출·적용. 실 Neo4j+PG 검증(hops=2 관계 회수, 출처 동반). |
 | 20260720 | /builder(전송 e2e) | Kafka 외부 리스너(compose `PLAINTEXT_HOST`=localhost:29092) 추가. **실 Kafka 파이프라인 관통 검증**: produce `research.ingested` → consume → `handle_ingested`(Article 저장 + LLM 관계추출 + 그래프). 전송 계층 "미검증" 해소. |
+| 20260720 | /design(ADR 0008) | 소스 재편 — 시세 **pykrx**(무료·키X), 콘텐츠 **뉴스(RSS)·공시(DART)·거시(ECOS/FRED)**. 계약에 `MacroIndicator`(거시 사실) 추가, 공시=Article/Event 흡수. KIS 제외. |

@@ -55,6 +55,18 @@ class PriceTick(BaseModel):
     volume: int
 
 
+# 공시(DART)는 별도 엔티티 없이 Article(원문+출처=DART 링크) + Event(사건)로 흡수 (ADR 0008)
+class MacroIndicator(BaseModel):
+    """거시 지표(ECOS·FRED) — 사실. 금리·환율·물가 등. 스크립트 맥락·이슈 신호. (ADR 0008)"""
+
+    name: str  # 예: '기준금리' · '원달러환율' · 'CPI'
+    value: float
+    unit: str = ""
+    as_of: datetime  # UTC
+    source: str  # 'ECOS' | 'FRED'
+    source_url: str  # 가드레일: 출처 필수
+
+
 # ── 3) GET /research/search (근거 회수, agent east-west) ──
 SEARCH_ENDPOINT = ("GET", "/research/search")
 
