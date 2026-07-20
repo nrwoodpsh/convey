@@ -33,6 +33,12 @@ def tag_tickers(text: str, dictionary: dict[str, str] | None = None) -> list[str
     return tagged
 
 
+def tag_entity_names(text: str, dictionary: dict[str, str] | None = None) -> list[str]:
+    """본문에 등장하는 사전 엔티티 **이름** 목록(관계추출 allowed용). 사전 밖은 포함 안 함."""
+    d = dictionary or TICKER_DICT
+    return [name for name in d if name in text]
+
+
 def tag_event_hints(text: str) -> list[str]:
     """사건 후보(실적·공시·급등락) 힌트 — 키워드 규칙. 확정이 아니라 후보."""
     hints: list[str] = []

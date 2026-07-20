@@ -1,7 +1,12 @@
 """라운드① 규칙 태깅 검증 — 환각 없음(사전 밖 종목은 태깅 안 됨)이 핵심(알파1)."""
 from __future__ import annotations
 
-from app.tagging import tag_event_hints, tag_tickers
+from app.tagging import tag_entity_names, tag_event_hints, tag_tickers
+
+
+def test_entity_names_only_known() -> None:
+    text = "삼성전자와 SK하이닉스가 언급됐고 애플도 나왔다"
+    assert tag_entity_names(text) == ["삼성전자", "SK하이닉스"]  # 애플(사전 밖) 제외
 
 
 def test_tags_only_known_tickers() -> None:

@@ -104,11 +104,15 @@ class MarketTickEvent(BaseModel):
 
 
 class ResearchIngestedEvent(BaseModel):
-    article_id: int
+    title: str
+    body: str  # 원문 — research가 Article 저장 + LLM 관계추출에 사용
     source_url: str  # 가드레일
     license: str  # 가드레일
     published_at: datetime  # UTC
-    tickers: list[str] = Field(default_factory=list, description="규칙/사전 태깅된 종목")
+    tickers: list[str] = Field(default_factory=list, description="규칙 태깅된 종목 코드")
+    entities: list[str] = Field(
+        default_factory=list, description="규칙 매칭된 엔티티 이름(관계추출 allowed)"
+    )
     event_hints: list[str] = Field(default_factory=list, description="사건 후보(실적·공시 등)")
 
 
