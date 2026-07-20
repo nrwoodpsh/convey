@@ -28,10 +28,12 @@ class SupabaseVerifier:
         jwks: SigningKeyResolver,
         *,
         audience: str,
+        issuer: str | None = None,
         algorithms: list[str] | None = None,
     ) -> None:
         self._jwks = jwks
         self._audience = audience
+        self._issuer = issuer  # 설정 시 iss(발급자)까지 검증(교차 프로젝트 토큰 하드닝)
         self._algorithms = algorithms or ["ES256", "RS256"]
 
     def verify(self, token: str) -> dict[str, Any]:
@@ -42,19 +44,22 @@ class SupabaseVerifier:
                 signing_key.key,
                 algorithms=self._algorithms,
                 audience=self._audience,
+                issuer=self._issuer,
             )
             return claims
         except jwt.ExpiredSignatureError as exc:
             raise AppError("AUTH003", "토큰 만료", status=401) from exc
         except jwt.InvalidAudienceError as exc:
             raise AppError("AUTH004", "잘못된 audience", status=401) from exc
+        except jwt.InvalidIssuerError as exc:
+            raise AppError("AUTH004", "잘못된 발급자(iss)", status=401) from exc
         except jwt.PyJWTError as exc:
             raise AppError("AUTH002", "토큰 검증 실패", status=401) from exc
 
 
-def build_verifier(jwks_url: str, audience: str) -> SupabaseVerifier:
+def build_verifier(jwks_url: str, audience: str, issuer: str | None = None) -> SupabaseVerifier:
     """운영용 — Supabase JWKS URL로 검증기 생성(키 캐시는 PyJWKClient가 담당)."""
-    return SupabaseVerifier(PyJWKClient(jwks_url), audience=audience)
+    return SupabaseVerifier(PyJWKClient(jwks_url), audience=audience, issuer=issuer)
 
 
 def claims_to_user(claims: dict[str, Any]) -> UserContext:

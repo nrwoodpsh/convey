@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from common.errors import AppError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import PublishRecord
@@ -34,7 +35,15 @@ async def enqueue(session: AsyncSession, content_id: int, channel: str = "youtub
         return _to_res(existing)
     rec = PublishRecord(content_id=content_id, channel=channel, status=PublishStatus.QUEUED.value)
     session.add(rec)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # 동시 중복(다중 인스턴스) — 경쟁자가 먼저 삽입. 롤백 후 승자 레코드 반환(멱등 유지).
+        await session.rollback()
+        winner = await _get(session, content_id)
+        if winner is not None:
+            return _to_res(winner)
+        raise
     await session.refresh(rec)
     return _to_res(rec)
 

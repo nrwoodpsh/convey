@@ -91,6 +91,34 @@ def test_expired_rejected(keypair: tuple[RSAPrivateKey, Any]) -> None:
     assert exc.value.code == "AUTH003"  # 계약: EXPIRED
 
 
+def test_wrong_issuer_rejected(keypair: tuple[RSAPrivateKey, Any]) -> None:
+    priv, pub = keypair
+    tok = _token(priv, {
+        "sub": "u", "aud": "authenticated", "iss": "https://evil.co/auth/v1",
+        "exp": int(time.time()) + 60,
+    })
+    v = SupabaseVerifier(
+        _FakeJWKS(pub), audience="authenticated", issuer="https://proj.co/auth/v1",
+        algorithms=["RS256"],
+    )
+    with pytest.raises(AppError) as exc:
+        v.verify(tok)
+    assert exc.value.status == 401 and exc.value.code == "AUTH004"
+
+
+def test_correct_issuer_passes(keypair: tuple[RSAPrivateKey, Any]) -> None:
+    priv, pub = keypair
+    tok = _token(priv, {
+        "sub": "u", "aud": "authenticated", "iss": "https://proj.co/auth/v1",
+        "exp": int(time.time()) + 60,
+    })
+    v = SupabaseVerifier(
+        _FakeJWKS(pub), audience="authenticated", issuer="https://proj.co/auth/v1",
+        algorithms=["RS256"],
+    )
+    assert v.verify(tok)["sub"] == "u"
+
+
 def test_forged_signature_rejected(keypair: tuple[RSAPrivateKey, Any]) -> None:
     priv, pub = keypair
     attacker = rsa.generate_private_key(public_exponent=65537, key_size=2048)

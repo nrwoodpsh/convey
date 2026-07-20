@@ -27,12 +27,17 @@ class GraphRepo:
         )
         self._driver.execute_query(query, s=subject, o=obj, aid=source_article_id)
 
-    def relations_of(self, name: str, *, limit: int = 25) -> list[tuple[str, str, str, int]]:
-        """종목/엔티티에서 나가는 관계 회수(1홉). 근거 기사 id 동반."""
+    def relations_of(
+        self, name: str, *, hops: int = 1, limit: int = 25
+    ) -> list[tuple[str, str, str, int]]:
+        """종목/엔티티에서 나가는 관계 회수(최대 hops홉 — 다홉 추론). 근거 기사 id 동반."""
+        if not 1 <= hops <= 3:  # 화이트리스트: 정수 검증 후에만 Cypher에 인라인(주입 차단)
+            raise ValueError(f"hops는 1..3이어야 함: {hops}")
         query = (
-            "MATCH (s:Entity {name: $n})-[r]->(o:Entity) "
-            "RETURN s.name AS subject, type(r) AS edge, o.name AS object, "
-            "r.source_article_id AS aid LIMIT $lim"
+            f"MATCH p = (s:Entity {{name: $n}})-[r*1..{hops}]->(o:Entity) "
+            "UNWIND relationships(p) AS rel "
+            "RETURN DISTINCT startNode(rel).name AS subject, type(rel) AS edge, "
+            "endNode(rel).name AS object, rel.source_article_id AS aid LIMIT $lim"
         )
         result = self._driver.execute_query(query, n=name, lim=limit)
         return [

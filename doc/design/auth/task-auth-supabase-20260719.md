@@ -60,3 +60,4 @@ JWKS는 앱 기동 시/주기적으로 캐시한다. `{SUPABASE_URL}/auth/v1/.we
 | 20260719 | /design | 최초 설계 (ADR 0007 — Supabase 인증) |
 | 20260720 | /builder | `supabase_auth.py`(JWKS 검증+매핑) 신설, gateway `_authenticate` 교체, `services/auth`·`auth_db` 제거, compose·infra·.env·README 정리. 단위 테스트 5 pass, mypy --strict 4파일 clean |
 | 20260720 | /builder · Deviation | 계획: File Map에 `security.py` 미언급 / 코드: `create_token`·`decode_token`(자체 JWT)이 auth 제거로 죽은 코드 + mypy 에러 노출 / 선택: 두 함수·`import jwt` 제거 / 사유: ADR 0007이 대체하는 함수라 auth 마이그레이션의 마무리 |
+| 20260720 | /builder(리뷰 M3) | Supabase JWT `iss`(발급자) 검증 추가 — `SupabaseVerifier(issuer=)`·`build_verifier(issuer=)`, gateway `supabase_issuer`(=`{url}/auth/v1`) 주입, `InvalidIssuerError`→401. 단위 2건 추가(wrong/correct iss). |

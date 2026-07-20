@@ -39,7 +39,9 @@ _HOP_BY_HOP = {"host", "content-length", "connection", "keep-alive", "transfer-e
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.client = httpx.AsyncClient(timeout=httpx.Timeout(120.0))
-    app.state.verifier = build_verifier(settings.jwks_url, settings.supabase_aud)
+    app.state.verifier = build_verifier(
+        settings.jwks_url, settings.supabase_aud, issuer=settings.supabase_issuer
+    )
     try:
         yield
     finally:

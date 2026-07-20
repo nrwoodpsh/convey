@@ -21,17 +21,19 @@ async def search(
     *,
     entity: str | None = None,
     top_k: int = 4,
+    hops: int = 2,
+    window_days: int | None = None,
 ) -> SearchResponse:
-    """그래프 관계(Neo4j) + SQL 사실(Postgres)을 합쳐 근거를 반환."""
+    """그래프 관계(Neo4j, 최대 hops홉) + SQL 사실(Postgres, window_days 기간)을 합쳐 근거를 반환."""
     # 사실 (Postgres SQL)
-    fact_rows = await repository.fact_search(session, query, top_k)
+    fact_rows = await repository.fact_search(session, query, top_k, window_days=window_days)
     facts = [
         FactHit(kind="article", text=title, source_url=url, ref_id=aid)
         for (aid, title, url) in fact_rows
     ]
     # 관계 (Neo4j traversal — 동기 드라이버는 스레드로 감싸 이벤트루프 비블로킹)
     ent = entity or query
-    rel_rows = await asyncio.to_thread(graph.relations_of, ent)
+    rel_rows = await asyncio.to_thread(graph.relations_of, ent, hops=hops)
     # 관계 근거 URL 해석 (source_article_id → Article.source_url)
     article_ids = list({aid for (_, _, _, aid) in rel_rows})
     url_map = await repository.source_urls_for(session, article_ids)

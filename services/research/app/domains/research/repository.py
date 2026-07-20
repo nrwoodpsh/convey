@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,16 +14,17 @@ from app.domains.research.models import Article
 
 
 async def fact_search(
-    session: AsyncSession, query: str, top_k: int
+    session: AsyncSession, query: str, top_k: int, *, window_days: int | None = None
 ) -> list[tuple[int, str, str]]:
-    """키워드로 Article 회수(제목·본문 ILIKE). 벡터 아님. 반환 (article_id, title, source_url)."""
+    """키워드로 Article 회수(제목·본문 ILIKE). window_days 있으면 기간 필터. 반환 (id, title, source_url)."""
     like = f"%{query}%"
-    stmt = (
-        select(Article.id, Article.title, Article.source_url)
-        .where(or_(Article.title.ilike(like), Article.body.ilike(like)))
-        .order_by(Article.published_at.desc())
-        .limit(top_k)
+    stmt = select(Article.id, Article.title, Article.source_url).where(
+        or_(Article.title.ilike(like), Article.body.ilike(like))
     )
+    if window_days is not None:
+        since = datetime.now(timezone.utc) - timedelta(days=window_days)
+        stmt = stmt.where(Article.published_at >= since)
+    stmt = stmt.order_by(Article.published_at.desc()).limit(top_k)
     rows = (await session.execute(stmt)).all()
     return [(row[0], row[1], row[2]) for row in rows]
 

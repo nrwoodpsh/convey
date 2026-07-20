@@ -23,6 +23,10 @@ class GatewaySettings(BaseAppSettings):
         return self.supabase_jwks_url or f"{self.supabase_url}/auth/v1/.well-known/jwks.json"
 
     @property
+    def supabase_issuer(self) -> str:
+        return f"{self.supabase_url}/auth/v1"
+
+    @property
     def routes(self) -> dict[str, str]:
         return {
             "/sample": self.route_sample,
