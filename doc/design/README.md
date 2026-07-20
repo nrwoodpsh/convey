@@ -13,9 +13,27 @@
 - **빌드 순서 = 의존성 순**: 아래를 쌓아야 위가 성립. 한 라운드 끝나면 `/builder` → `/sync`.
 - **계약 우선**: 엔티티·엔드포인트·이벤트 페이로드는 계약 파일이 정본. task-*.md엔 자연어 설계만(중복 금지).
 
+## 의존성 순서 (한눈에)
+
+```
+0. 인증(Supabase)          ← 독립·기반, 가장 먼저 (ADR 0007)
+1. research (데이터)        ← 파이프라인 뿌리(알파1)
+2. issue-detector          ← research 스트림 필요 (알파2)
+3. content · agent         ← research /search 필요 (알파1)
+4. 미디어 · video-assembly ← content 잡 필요 (알파3)
+5. publishing              ← 승인된 완성본 필요 (알파4)
+```
+
 ## 라운드 로드맵
 
-### 라운드 ① — 데이터 기반 (알파1) ★먼저
+### 라운드 0 — 기반·인증 (Supabase) ★가장 먼저
+- **대상**: `gateway`(Supabase JWT 검증으로 교체), `auth`(정리/제거)
+- **산출**: `doc/design/auth/task-*.md` (+ 검증 DTO·에러 계약)
+- **정할 것**: Supabase JWT 검증 방식(JWKS URL vs 공유 시크릿), `UserContext` 매핑, 게이트웨이 검증 교체 지점, `auth` 서비스 제거 vs 프로필 래퍼, `auth_db` 처리, `.env` 키(`SUPABASE_*`), 로그인 흐름(클라이언트가 Supabase 직접 vs 게이트웨이 경유)
+- **코드 델타**: gateway JWT 검증 → Supabase JWKS, `auth` 서비스 정리, `.env.example`에 `SUPABASE_*` 키 이름, compose에서 `auth` 조정
+- **왜 먼저**: 모든 보안 API가 게이트웨이 인증에 의존. 파이프라인과 독립이라 먼저 끝낼 수 있음. 단 자체 **도메인 아님 — 공통/기반**(ADR 0007).
+
+### 라운드 ① — 데이터 기반 (알파1)
 - **대상**: `research`(**Neo4j 지식 그래프** + Postgres 사실), `news-feed`(수집+태깅+추출), `market-feed`(시세 실사용)
 - **산출**: `doc/design/research/task-*.md` + 계약
 - **정해야 할 것**:
@@ -48,8 +66,8 @@
 
 ## 아키텍처 정합 확인 (설계 착수 전 필수 참조)
 - `doc/ref/architecture/00.아키텍처.html`(시각 정본) · `01~04`(도메인별 텍스트)
-- `doc/ref/domains/`(경계) · `doc/decisions/0004`(알파) · `0005`(그래프 저장소) · `0006`(POC 범위·벡터제외·영상경계)
-- `doc/ref/glossary/terms.md`(용어)
+- `doc/ref/domains/`(경계) · `doc/decisions/0004`(알파) · `0005`(그래프 저장소) · `0006`(POC 범위·벡터제외·영상경계) · `0007`(인증 Supabase)
+- `doc/ref/glossary/01.terms.md`(용어)
 
 ## 현재 스캐폴드 vs 목표 (라운드 ① 정합 진행)
 

@@ -164,7 +164,7 @@ curl -s -X POST http://localhost:8080/auth/login \
 | `CLAUDE.md` | 정체성 · 워크플로우 · 가드레일 · 코딩 스타일 (정본) |
 | `doc/ref/architecture/` | **`00.아키텍처.html`**(시각 정본) + 텍스트 `01~04` · README 인덱스 |
 | `doc/ref/domains/` | 도메인 경계(research·content·publishing) |
-| `doc/ref/glossary/terms.md` | 용어(종목·사건·지식 그래프·알파·커모디티…) |
+| `doc/ref/glossary/01.terms.md` | 용어(종목·사건·지식 그래프·알파·커모디티…) |
 | `doc/decisions/` | ADR — `0004`(알파)·`0005`(Neo4j 그래프)·`0001~0003` |
 | `doc/design/README.md` | 설계 진행 가이드(빌드 ①~⑤ 로드맵) |
 

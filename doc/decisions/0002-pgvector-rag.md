@@ -8,4 +8,4 @@
 - **트레이드오프**: 초대형 스케일에서 전용 벡터DB 대비 성능 한계 vs 인프라 단순화(운영 컴포넌트 1개 감소)·서비스별 DB 원칙 유지·트랜잭션 일관성. 단일 사용자 규모에 충분.
 - **영향**: `research` 도메인이 임베딩 소유, `agent`가 pgvector 검색. `docker-compose.yml` pgvector 주석 해제, `research_db`에 확장 설치 필요.
 - **대안(기각)**: 전용 벡터DB — 규모 대비 운영 과함. 인메모리 검색 — 영속성·재기동 문제.
-- **관련**: [0001-multimedia-pipeline-pivot]. `doc/ref/domains/research.md`, `doc/ref/architecture/README.md` 반영.
+- **관련**: [0001-multimedia-pipeline-pivot]. `doc/ref/domains/01.research.md`, `doc/ref/architecture/README.md` 반영.

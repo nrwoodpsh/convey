@@ -4,7 +4,7 @@
 
 - **프로젝트명**: CONVEY
 - **한 줄 정의**: **주식/시장 리서치를 유튜브 쇼츠(영상+이미지)로 바꾸는** 자동 파이프라인 (research → shorts). 한국어.
-- **기술 스택**: Python 3.11 MSA — FastAPI · Kafka(KRaft) · PostgreSQL(서비스별 DB — 시세·기사 사실) · **Neo4j(지식 그래프 — 종목·사건 관계·인과)** · Ollama(로컬 LLM) · KIS OpenAPI(시세) · 외부 미디어 API(broll·TTS — 커모디티) · ffmpeg(차트·수치 렌더+합성) · SQLAlchemy · Alembic. API 전용(BE). ※ RAG는 **GraphRAG+SQL**, 벡터(pgvector)는 POC 제외(ADR 0006).
+- **기술 스택**: Python 3.11 MSA — FastAPI · Kafka(KRaft) · PostgreSQL(서비스별 DB — 시세·기사 사실) · **Neo4j(지식 그래프 — 종목·사건 관계·인과)** · Ollama(로컬 LLM) · KIS OpenAPI(시세) · 외부 미디어 API(broll·TTS — 커모디티) · ffmpeg(차트·수치 렌더+합성) · SQLAlchemy · Alembic · **Supabase Auth**(인증 — 원형 자체 JWT 대체, ADR 0007). API 전용(BE). ※ RAG는 **GraphRAG+SQL**, 벡터(pgvector)는 POC 제외(ADR 0006).
 - **원형**: `py-msa-ai` (`nrwoodpsh/py-msa-ai-starter`) — 게이트웨이 단일 진입 + JWT 중앙검증 + HMAC 신뢰헤더 + 트랜잭션 아웃박스.
 - **주요 도메인(확정 — 3도메인)**: `research`(시세·뉴스를 **종목·사건 관계 그래프(Neo4j)+사실(Postgres)**로 저장) · `content`(스크립트·미디어 자산·완성본) · `publishing`(발행). 스크립트 생성은 `agent`, 이슈 선별은 `issue-detector`(컴포넌트), 정확 렌더+합성은 `video-assembly`, broll·TTS는 외주. 미디어 산출물 상태는 `content` 소유. ← `doc/ref/domains/`·`doc/ref/architecture/`.
 - **파이프라인 성격**: 원형(텍스트 LLM)에서 **멀티미디어(쇼츠) 파이프라인**으로 확장, **3단(축적→선별→제작)**. 발행 채널 **YouTube Shorts**. ← 전환 배경 `doc/decisions/`.
