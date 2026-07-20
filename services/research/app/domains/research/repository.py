@@ -1,18 +1,38 @@
-"""research 저장소 계층(Postgres 사실). TODO(/design): Article·PriceTick CRUD + 사실 조회 쿼리.
+"""research 저장소 계층(Postgres 사실) — Article·PriceTick 조회.
 
-관계·인과 그래프(Neo4j)는 별도 그래프 리포지토리(round① /builder)에서 다룬다.
+관계·인과 그래프(Neo4j)는 GraphRepo(app/graph)에서 다룬다.
+가드레일: Article.source_url은 NOT NULL이라 회수 결과는 항상 출처를 동반(무출처 0).
 """
 from __future__ import annotations
 
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.domains.research.models import Article
 
 
 async def fact_search(
     session: AsyncSession, query: str, top_k: int
 ) -> list[tuple[int, str, str]]:
-    """사실 조회 — ticker·기간·키워드로 Article·PriceTick 회수(SQL 인덱스). 벡터 아님.
+    """키워드로 Article 회수(제목·본문 ILIKE). 벡터 아님. 반환 (article_id, title, source_url)."""
+    like = f"%{query}%"
+    stmt = (
+        select(Article.id, Article.title, Article.source_url)
+        .where(or_(Article.title.ilike(like), Article.body.ilike(like)))
+        .order_by(Article.published_at.desc())
+        .limit(top_k)
+    )
+    rows = (await session.execute(stmt)).all()
+    return [(row[0], row[1], row[2]) for row in rows]
 
-    TODO(/design): Article(원문+출처)·PriceTick(시세) 대상 쿼리 구현.
-    반환 (article_id, text, source_url).
-    """
-    raise NotImplementedError("사실 조회 미구현 — /builder")
+
+async def source_urls_for(session: AsyncSession, ids: list[int]) -> dict[int, str]:
+    """기사 id → source_url. 그래프 관계의 근거 기사 URL 해석에 사용."""
+    if not ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(Article.id, Article.source_url).where(Article.id.in_(ids))
+        )
+    ).all()
+    return {row[0]: row[1] for row in rows}

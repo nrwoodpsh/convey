@@ -7,7 +7,7 @@ x-python-env: &python-env
 services:
   # ── 인프라 ────────────────────────────────────────────
   postgres:
-    image: postgres:16   # 사실 저장(시세·기사·출처). 벡터 임베딩은 POC 제외(ADR 0006)
+    image: postgres:16-alpine   # 사실 저장(시세·기사·출처). 벡터 임베딩은 POC 제외(ADR 0006)
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}

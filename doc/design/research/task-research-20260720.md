@@ -81,3 +81,6 @@
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
 | 20260720 | /design | 최초 설계 — 하이브리드 추출·GraphRAG·2-store (ADR 0004·0005·0006) |
+| 20260720 | /builder | 규칙 태깅·LLM 관계추출(**실 Ollama qwen3:14b**)·GraphRepo(**실 Neo4j** 라운드트립) 구현+검증. compose에 Neo4j 전용 컨테이너 추가, 네이티브 PG에 research_db/content_db 생성. 노드는 현재 generic `Entity`(타입 노드 Stock/Sector는 후속) |
+| 20260720 | /builder | Postgres 사실 모델(Article·PriceTick) + `fact_search` 구현. **실 research_db 라운드트립 검증**(매칭·출처 동반·무관 제외 — AC3·AC5). |
+| 20260720 | /builder | `GET /research/search` GraphRAG 통합 — `service.search`가 GraphRepo(Neo4j 관계) + `fact_search`(SQL 사실) 조립 → `SearchResponse`(FactHit·RelationHit, 계약 정합). main에 Neo4j 드라이버. **실 PG+Neo4j 조립 검증**(facts·relations **모두 source_url 동반** — AC3). mypy clean. **남음**: Kafka consumer(research.ingested) |

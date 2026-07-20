@@ -9,8 +9,9 @@ class Settings(BaseAppSettings):
     # 발행: 소스 원문 수집 완료 → issue-detector/content 구독
     topic_ingested: str = "research.ingested"
 
-    # 지식 그래프 — 관계·인과(Neo4j). round①에서 드라이버 연결 (ADR 0005)
-    # neo4j_url: str = "bolt://neo4j:7687"  # TODO(round① /builder)
+    # 지식 그래프 — 관계·인과(Neo4j, ADR 0005)
+    neo4j_url: str = "bolt://neo4j:7687"
+    neo4j_auth: str = "neo4j/convey-dev-pw"  # "user/pass" (NEO4J_AUTH env)
 
 
 settings = Settings()
