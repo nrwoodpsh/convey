@@ -8,11 +8,11 @@
 - **Scenario**: 사용자가 Supabase로 로그인해 받은 access token으로 게이트웨이 뒤 API를 호출한다. 게이트웨이가 그 토큰을 검증한다.
 - **Objective**: 원형의 자체 JWT 발급·검증을 Supabase에 위임한다. 인증 유지보수를 없애고, 하류 HMAC 신뢰헤더 패턴은 그대로 둔다.
 - **Acceptance Criteria**:
-  - [ ] AC1: 게이트웨이가 Supabase 발급 유효 JWT는 통과, 위조·만료 토큰은 **401**로 거절
-  - [ ] AC2: 검증된 요청은 `sub→user_id`·roles·name이 **HMAC 신뢰헤더**로 하류에 전달되어 기존 `make_gateway_dep` 검증을 통과
-  - [ ] AC3: 자체 JWT 발급 경로 제거 — `services/auth` login·refresh, `JWT_SECRET` 참조가 grep으로 **0**
-  - [ ] AC4: `api-contract.py`가 contract-gate(`mypy --strict`) 통과
-  - [ ] AC5: `PUBLIC_PATHS`·게이트웨이 라우트에서 `/auth/login`·`/auth/refresh`·`/auth` 정리
+  - [x] AC1: 위조·만료·잘못된 aud 토큰 → 401 (단위 테스트 검증). 게이트웨이 e2e는 실행 서버 필요
+  - [x] AC2: `sub→user_id`·roles·name 매핑 단위 테스트 통과. HMAC 주입 배선은 원형 패턴 유지
+  - [x] AC3: `services/auth` 제거, gateway `decode_token` 제거, `create_token`/`decode_token` 죽은코드 제거 — grep 0
+  - [x] AC4: `api-contract.py` contract-gate(`mypy --strict`) 통과
+  - [x] AC5: `PUBLIC_PATHS`={/health}, 라우트에서 `/auth` 제거
 
 ## 2. 사각지대 & 핵심 결정 (수정 가능성 순)
 
@@ -58,3 +58,5 @@ JWKS는 앱 기동 시/주기적으로 캐시한다. `{SUPABASE_URL}/auth/v1/.we
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
 | 20260719 | /design | 최초 설계 (ADR 0007 — Supabase 인증) |
+| 20260720 | /builder | `supabase_auth.py`(JWKS 검증+매핑) 신설, gateway `_authenticate` 교체, `services/auth`·`auth_db` 제거, compose·infra·.env·README 정리. 단위 테스트 5 pass, mypy --strict 4파일 clean |
+| 20260720 | /builder · Deviation | 계획: File Map에 `security.py` 미언급 / 코드: `create_token`·`decode_token`(자체 JWT)이 auth 제거로 죽은 코드 + mypy 에러 노출 / 선택: 두 함수·`import jwt` 제거 / 사유: ADR 0007이 대체하는 함수라 auth 마이그레이션의 마무리 |

@@ -68,16 +68,9 @@ services:
     build: {context: ., dockerfile: gateway/Dockerfile}
     <<: *python-env
     ports: ["${GATEWAY_PORT:-8080}:8000"]   # 유일한 외부 진입점
-    depends_on: [auth, sample-domain, llm-inference, agent, research, content]
+    depends_on: [sample-domain, llm-inference, agent, research, content]
 
-  auth:
-    build: {context: ., dockerfile: services/auth/Dockerfile}
-    <<: *python-env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/auth_db
-    depends_on:
-      postgres: {condition: service_healthy}
-
+  # 인증은 Supabase(외부)로 위임 — 자체 auth 서비스 없음 (ADR 0007)
   sample-domain:
     build: {context: ., dockerfile: services/sample-domain/Dockerfile}
     <<: *python-env

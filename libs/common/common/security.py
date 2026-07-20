@@ -1,7 +1,7 @@
-"""JWT 발급/검증 + 게이트웨이↔서비스 HMAC 신뢰헤더.
+"""게이트웨이↔서비스 HMAC 신뢰헤더 + UserContext.
 
 게이트웨이 중앙 인증 패턴:
-- 게이트웨이가 JWT 검증 후, 하류 호출에 사용자 컨텍스트 헤더 + HMAC 서명을 부착.
+- 게이트웨이가 토큰 검증(Supabase JWKS — ADR 0007) 후, 하류 호출에 사용자 컨텍스트 헤더 + HMAC 서명을 부착.
 - 서비스는 HMAC을 검증해 '게이트웨이 경유'만 신뢰(직접호출 차단).
 """
 from __future__ import annotations
@@ -11,8 +11,6 @@ import hmac
 import time
 from dataclasses import dataclass
 
-import jwt
-
 # 하류로 전달되는 신뢰 헤더 이름
 H_USER_ID = "X-User-Id"
 H_USER_NAME = "X-User-Name"
@@ -21,19 +19,6 @@ H_TIMESTAMP = "X-Gateway-Timestamp"
 H_SIGNATURE = "X-Gateway-Signature"
 
 _MAX_SKEW_SECONDS = 60
-
-
-# ── JWT ──────────────────────────────────────────────────
-def create_token(
-    *, subject: str, secret: str, algorithm: str, ttl_seconds: int, extra: dict | None = None
-) -> str:
-    now = int(time.time())
-    payload = {"sub": subject, "iat": now, "exp": now + ttl_seconds, **(extra or {})}
-    return jwt.encode(payload, secret, algorithm=algorithm)
-
-
-def decode_token(token: str, *, secret: str, algorithm: str) -> dict:
-    return jwt.decode(token, secret, algorithms=[algorithm])
 
 
 # ── HMAC 신뢰헤더 ─────────────────────────────────────────

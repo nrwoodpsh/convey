@@ -1,9 +1,0 @@
-FROM python:3.11-slim
-WORKDIR /app
-COPY libs/common /tmp/common
-RUN pip install --no-cache-dir /tmp/common
-COPY services/auth/pyproject.toml /app/pyproject.toml
-COPY services/auth/app /app/app
-RUN pip install --no-cache-dir .
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

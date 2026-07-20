@@ -1,7 +1,7 @@
 """FastAPI 게이트웨이 — 단일 외부 진입점.
 
 흐름:
-1. 공개 경로가 아니면 Bearer JWT 검증.
+1. 공개 경로가 아니면 Bearer 토큰을 **Supabase JWKS로 검증**(ADR 0007).
 2. 클라이언트가 위조했을 수 있는 신뢰헤더를 제거(StripTrustHeaders).
 3. 사용자 컨텍스트 헤더 + HMAC 서명을 붙여 하류로 프록시.
 """
@@ -20,9 +20,10 @@ from common.security import (
     H_USER_ID,
     H_USER_NAME,
     H_USER_ROLES,
-    decode_token,
+    UserContext,
     sign_internal,
 )
+from common.supabase_auth import SupabaseVerifier, build_verifier, claims_to_user
 from fastapi import FastAPI, Request, Response
 
 from app.config import PUBLIC_PATHS, settings
@@ -38,6 +39,7 @@ _HOP_BY_HOP = {"host", "content-length", "connection", "keep-alive", "transfer-e
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.client = httpx.AsyncClient(timeout=httpx.Timeout(120.0))
+    app.state.verifier = build_verifier(settings.jwks_url, settings.supabase_aud)
     try:
         yield
     finally:
@@ -62,18 +64,15 @@ def _resolve(path: str) -> tuple[str, str] | None:
     return None
 
 
-def _authenticate(request: Request) -> dict:
+def _authenticate(request: Request) -> UserContext:
+    from common.errors import AppError
+
     auth = request.headers.get("authorization", "")
     if not auth.startswith("Bearer "):
-        from common.errors import AppError
-
-        raise AppError("unauthorized", "인증 토큰 없음", status=401)
-    try:
-        return decode_token(auth[7:], secret=settings.jwt_secret, algorithm=settings.jwt_algorithm)
-    except Exception as exc:  # noqa: BLE001
-        from common.errors import AppError
-
-        raise AppError("unauthorized", "토큰 검증 실패", status=401) from exc
+        raise AppError("AUTH001", "인증 토큰 없음", status=401)
+    verifier: SupabaseVerifier = request.app.state.verifier
+    claims = verifier.verify(auth[7:])  # 검증 실패 시 AppError(401)
+    return claims_to_user(claims)
 
 
 @app.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
@@ -94,14 +93,13 @@ async def proxy(full_path: str, request: Request) -> Response:
 
     # 2) 인증 + 신뢰헤더 주입
     if path not in PUBLIC_PATHS:
-        claims = _authenticate(request)
-        user_id = str(claims.get("sub", ""))
+        user = _authenticate(request)
         ts, sig = sign_internal(
-            secret=settings.gateway_internal_secret, user_id=user_id, path=downstream
+            secret=settings.gateway_internal_secret, user_id=user.user_id, path=downstream
         )
-        headers[H_USER_ID] = user_id
-        headers[H_USER_NAME] = str(claims.get("name", ""))
-        headers[H_USER_ROLES] = str(claims.get("roles", ""))
+        headers[H_USER_ID] = user.user_id
+        headers[H_USER_NAME] = user.user_name
+        headers[H_USER_ROLES] = user.roles
         headers[H_TIMESTAMP] = ts
         headers[H_SIGNATURE] = sig
 
