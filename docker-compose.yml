@@ -84,7 +84,7 @@ services:
     build: {context: ., dockerfile: gateway/Dockerfile}
     <<: *python-env
     ports: ["${GATEWAY_PORT:-8080}:8000"]   # 유일한 외부 진입점
-    depends_on: [sample-domain, llm-inference, agent, research, content, issue-detector]
+    depends_on: [sample-domain, llm-inference, agent, research, content, issue-detector, publishing]
 
   # 인증은 Supabase(외부)로 위임 — 자체 auth 서비스 없음 (ADR 0007)
   sample-domain:
@@ -151,6 +151,16 @@ services:
       postgres: {condition: service_healthy}
       kafka: {condition: service_healthy}
       agent: {condition: service_started}
+
+  # 발행 — content.approved → YouTube 업로드(멱등·재시도) + 상태 조회. 알파4 (라운드⑤)
+  publishing:
+    build: {context: ., dockerfile: services/publishing/Dockerfile}
+    <<: *python-env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/publishing_db
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_healthy}
 
   # 외부 연동 워커(예: KIS) — HTTP 없음, 게이트웨이 뒤 아님, Kafka로만 결합
   market-feed:

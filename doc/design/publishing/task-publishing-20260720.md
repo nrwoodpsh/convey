@@ -50,3 +50,4 @@
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
 | 20260720 | /design | 최초 설계 — 승인 후 발행·멱등 재개·스케줄 (알파4) |
+| 20260720 | /builder | 멱등 발행 상태머신 — `PublishRecord`(content_id 유니크=멱등키) + `enqueue`(중복 업로드 방지)·`mark_published/failed`·`get_status`. YouTube 부패방지 스텁·consumer(content.approved)·`GET /publishing/{content_id}`. gateway `/publishing`·compose·**publishing_db 생성**. **실 publishing_db 검증**(멱등 enqueue·queued→published — AC2·AC4)·mypy clean. **남음**: YouTube OAuth 업로드(부패방지 연결)·전송 e2e·스케줄 워커 |

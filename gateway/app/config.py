@@ -11,6 +11,7 @@ class GatewaySettings(BaseAppSettings):
     route_research: str = "http://research:8000"
     route_content: str = "http://content:8000"
     route_issue: str = "http://issue-detector:8000"
+    route_publishing: str = "http://publishing:8000"
 
     # Supabase 인증 (ADR 0007) — 로그인·발급은 Supabase, 게이트웨이는 JWKS 검증만
     supabase_url: str = "http://localhost"
@@ -30,6 +31,7 @@ class GatewaySettings(BaseAppSettings):
             "/research": self.route_research,
             "/content": self.route_content,
             "/issues": self.route_issue,
+            "/publishing": self.route_publishing,
         }
 
 
