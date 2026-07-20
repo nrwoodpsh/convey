@@ -49,3 +49,4 @@
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
 | 20260720 | /design | 최초 설계 — 워커+조회API, 가중합 랭킹 (알파2) |
+| 20260720 | /builder | `RollingRanker`(가중합·롤링윈도우) + worker(두 스트림 소비) + main(`GET /issues/today`) 구현. gateway `/issues`·compose 등록. **랭킹 결정론 단위 4 pass**(정렬·윈도우·z-score)·mypy clean. 스트림 소비·API는 구조적 배선(Kafka e2e 후속). |

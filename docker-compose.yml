@@ -84,7 +84,7 @@ services:
     build: {context: ., dockerfile: gateway/Dockerfile}
     <<: *python-env
     ports: ["${GATEWAY_PORT:-8080}:8000"]   # 유일한 외부 진입점
-    depends_on: [sample-domain, llm-inference, agent, research, content]
+    depends_on: [sample-domain, llm-inference, agent, research, content, issue-detector]
 
   # 인증은 Supabase(외부)로 위임 — 자체 auth 서비스 없음 (ADR 0007)
   sample-domain:
@@ -124,6 +124,13 @@ services:
   # 뉴스·RSS 수집 + 종목·사건 태깅 워커 — HTTP 없음, Kafka로만 결합 (market-feed 원형 복제·확장)
   news-feed:
     build: {context: ., dockerfile: services/news-feed/Dockerfile}
+    <<: *python-env
+    depends_on:
+      kafka: {condition: service_healthy}
+
+  # 이슈 종목 선별 — 스트림 집계 랭킹(워커) + 조회 API. 알파2 (라운드②)
+  issue-detector:
+    build: {context: ., dockerfile: services/issue-detector/Dockerfile}
     <<: *python-env
     depends_on:
       kafka: {condition: service_healthy}
