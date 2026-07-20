@@ -11,7 +11,7 @@
 ## 변경사항 (BE, 신규 서비스)
 
 - `services/video-assembly/app/render.py` — `render_chart(ChartOverlay)` + `format_price`(수치=입력 그대로)
-- `services/video-assembly/app/assemble.py` — `compose`(ffmpeg: 차트+배경·음성 → 9:16 mp4)
+- `services/video-assembly/app/assemble.py` — `compose` + `build_short`(이미지 켄번즈+차트+자막+오디오 → 9:16 mp4)
 - `services/video-assembly/app/worker.py`·`config.py` — 워커 진입·설정
 - `services/video-assembly/{pyproject.toml,Dockerfile}` — matplotlib + ffmpeg·fonts-nanum
 - `docker-compose.yml` — video-assembly 서비스
