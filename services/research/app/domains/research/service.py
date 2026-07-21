@@ -10,7 +10,13 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.research import repository
-from app.domains.research.schemas import FactHit, PriceEvidence, RelationHit, SearchResponse
+from app.domains.research.schemas import (
+    FactHit,
+    MacroHit,
+    PriceEvidence,
+    RelationHit,
+    SearchResponse,
+)
 from app.graph.neo4j_repo import GraphRepo
 
 
@@ -57,6 +63,16 @@ async def search(
                 ticker=ticker, close=close, change_pct=change_pct,
                 series=series, source_url=source_url, ref_id=ref_id,
             )
+    # 거시 맥락 (각 name별 최신) — 종목 무관 전역 사실. 무출처 제거.
+    macro_rows = await repository.latest_macros(session)
+    macros = [
+        MacroHit(
+            name=name, value=value, unit=unit, as_of=as_of,
+            source=source, source_url=url, ref_id=mid,
+        )
+        for (mid, name, value, unit, as_of, source, url) in macro_rows
+        if url
+    ]
     return SearchResponse(
-        query=query, entity=ent, facts=facts, relations=relations, price=price
+        query=query, entity=ent, facts=facts, relations=relations, price=price, macros=macros
     )

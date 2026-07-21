@@ -106,12 +106,25 @@ class PriceEvidence(BaseModel):
     ref_id: int  # PriceTick id
 
 
+class MacroHit(BaseModel):
+    """거시 지표 근거(MacroIndicator 회수) — 종목 무관 전역 맥락. 출처 동반(라운드⑦)."""
+
+    name: str  # 예: '한국은행 기준금리' · '원달러환율'
+    value: float
+    unit: str = ""
+    as_of: datetime  # UTC
+    source: str  # 'ECOS' | 'FRED'
+    source_url: str  # 가드레일: 무출처 금지
+    ref_id: int  # MacroIndicator id
+
+
 class SearchRes(BaseModel):
     query: str
     entity: str | None  # 해석된 주요 종목/엔티티
     facts: list[FactHit] = Field(default_factory=list)
     relations: list[RelationHit] = Field(default_factory=list)
     price: PriceEvidence | None = None  # ticker 한정 시 가격 근거(라운드⑤)
+    macros: list[MacroHit] = Field(default_factory=list)  # 거시 맥락(각 name별 최신, 라운드⑦)
 
 
 # ── 4) 이벤트 계약 ────────────────────────────────────────

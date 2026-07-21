@@ -11,16 +11,17 @@ from dataclasses import dataclass, field
 import httpx
 from common.security import H_SIGNATURE, H_TIMESTAMP, H_USER_ID, sign_internal
 
-from app.script.builder import FactEvidence, PriceEvidence
+from app.script.builder import FactEvidence, MacroEvidence, PriceEvidence
 
 
 @dataclass
 class Evidence:
-    """스크립트 빌더 입력 — 가격 근거(수치 슬롯) + 시계열(차트) + 사실(인용)."""
+    """스크립트 빌더 입력 — 가격 근거(수치 슬롯) + 시계열(차트) + 사실(인용) + 거시 맥락."""
 
     price: PriceEvidence | None
     series: list[float] = field(default_factory=list)
     facts: list[FactEvidence] = field(default_factory=list)
+    macros: list[MacroEvidence] = field(default_factory=list)
 
 
 class Retriever:
@@ -66,7 +67,15 @@ class Retriever:
             for f in data.get("facts", [])
             if f.get("source_url")  # 가드레일: 무출처 제외
         ]
-        return Evidence(price=price, series=series, facts=facts)
+        macros: list[MacroEvidence] = [
+            {
+                "name": str(m["name"]), "value": float(m["value"]), "unit": str(m.get("unit", "")),
+                "source_url": str(m["source_url"]), "ref_id": int(m["ref_id"]),
+            }
+            for m in data.get("macros", [])
+            if m.get("source_url")  # 가드레일: 무출처 제외
+        ]
+        return Evidence(price=price, series=series, facts=facts, macros=macros)
 
     async def search(self, query: str) -> str:
         """/chat 에이전트 루프용 텍스트 컨텍스트 — 사실을 한 문자열로. (스크립트는 gather 사용)."""

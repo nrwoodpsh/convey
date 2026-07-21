@@ -138,6 +138,27 @@ async def upsert_macro(
     return row.id, True
 
 
+async def latest_macros(
+    session: AsyncSession, *, limit: int = 20
+) -> list[tuple[int, str, float, str, datetime, str, str]]:
+    """각 name별 최신 거시 1건 → (id, name, value, unit, as_of, source, source_url).
+
+    Postgres DISTINCT ON (name) + ORDER BY name, as_of DESC. 값은 저장 그대로(조작 0).
+    """
+    stmt = (
+        select(
+            MacroIndicator.id, MacroIndicator.name, MacroIndicator.value,
+            MacroIndicator.unit, MacroIndicator.as_of, MacroIndicator.source,
+            MacroIndicator.source_url,
+        )
+        .distinct(MacroIndicator.name)
+        .order_by(MacroIndicator.name, MacroIndicator.as_of.desc())
+        .limit(limit)
+    )
+    rows = (await session.execute(stmt)).all()
+    return [(r[0], r[1], r[2], r[3], r[4], r[5], r[6]) for r in rows]
+
+
 async def source_urls_for(session: AsyncSession, ids: list[int]) -> dict[int, str]:
     """기사 id → source_url. 그래프 관계의 근거 기사 URL 해석에 사용."""
     if not ids:

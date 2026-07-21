@@ -24,6 +24,14 @@ class FactEvidence(TypedDict):
     ref_id: int
 
 
+class MacroEvidence(TypedDict):
+    name: str
+    value: float
+    unit: str
+    source_url: str
+    ref_id: int
+
+
 @dataclass
 class Citation:
     claim: str
@@ -49,8 +57,13 @@ def build_script(
     price: PriceEvidence,
     facts: list[FactEvidence],
     llm: Callable[[str], str],
+    macros: list[MacroEvidence] | None = None,
 ) -> Script:
-    """근거 스크립트 생성 — 수치는 price에서만 슬롯으로, 연결 문장만 LLM. 모든 항목 출처 결속."""
+    """근거 스크립트 생성 — 수치는 price·macro 슬롯에서만, 연결 문장만 LLM. 모든 항목 출처 결속.
+
+    macros(거시 맥락)는 선택 — 비면 기존과 동일(회귀 0). 거시 수치도 슬롯에서만(환각 차단).
+    """
+    macros = macros or []
     ticker = price["ticker"]
     close = str(price["close"])
     change = f"{price['change_pct']:.2f}"
@@ -72,4 +85,14 @@ def build_script(
         Citation(f"{ticker} 종가 {close}원 / 등락률 {change}%", price["source_url"], price["ref_id"]),
         *[Citation(fact["text"], fact["source_url"], fact["ref_id"]) for fact in facts],
     ]
+
+    # 거시 맥락 섹션 — 수치는 macro 슬롯에서만(사실), LLM 미개입.
+    if macros:
+        slots = {m["name"]: f"{m['value']} {m['unit']}".strip() for m in macros}
+        summary = ", ".join(f"{m['name']} {slots[m['name']]}" for m in macros)
+        sections.append(ScriptSection("macro", f"거시 맥락 — {summary}", slots))
+        citations.extend(
+            Citation(f"{m['name']} {slots[m['name']]}", m["source_url"], m["ref_id"])
+            for m in macros
+        )
     return Script(sections=sections, citations=citations)
