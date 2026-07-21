@@ -29,13 +29,15 @@ async def search(
     q: str,
     top_k: int = 4,
     entity: str | None = None,
+    ticker: str | None = None,
     hops: int = 2,
     window_days: int | None = None,
     user: UserContext = Depends(gateway_user),
     session: AsyncSession = Depends(get_session),
     graph: GraphRepo = Depends(get_graph),
 ) -> SearchResponse:
-    """근거 회수 — 그래프 관계(최대 hops홉) + SQL 사실(window_days 기간). GraphRAG, 벡터 아님."""
+    """근거 회수 — 그래프 관계(최대 hops홉) + SQL 사실(window_days 기간) + 가격 근거(ticker 한정)."""
     return await service.search(
-        session, graph, q, entity=entity, top_k=top_k, hops=hops, window_days=window_days
+        session, graph, q, entity=entity, ticker=ticker,
+        top_k=top_k, hops=hops, window_days=window_days,
     )

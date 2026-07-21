@@ -8,7 +8,10 @@ class Settings(BaseAppSettings):
 
     # 구독: 생성 요청 (on-demand API 또는 research.ingested 자동)
     topic_generate: str = "content.generate"
-    # 발행: 미디어 fan-out (후속 라운드)
+    # 오케스트레이션(키 없는 경로, 라운드⑤): content ↔ video-assembly
+    topic_assemble: str = "media.assemble"  # 발행 → video-assembly
+    topic_assembled: str = "content.assembled"  # 구독 ← video-assembly (fan-in)
+    # 발행: 미디어 fan-out (외부 broll/TTS — 키 발급 후 라운드)
     topic_image: str = "image.generate"
     topic_tts: str = "tts.generate"
     topic_video_clip: str = "video.clip"

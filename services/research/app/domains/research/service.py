@@ -10,7 +10,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.research import repository
-from app.domains.research.schemas import FactHit, RelationHit, SearchResponse
+from app.domains.research.schemas import FactHit, PriceEvidence, RelationHit, SearchResponse
 from app.graph.neo4j_repo import GraphRepo
 
 
@@ -20,6 +20,7 @@ async def search(
     query: str,
     *,
     entity: str | None = None,
+    ticker: str | None = None,
     top_k: int = 4,
     hops: int = 2,
     window_days: int | None = None,
@@ -46,4 +47,16 @@ async def search(
     # 가드레일: 무출처 제거
     facts = [f for f in facts if f.source_url]
     relations = [r for r in relations if r.source_url]
-    return SearchResponse(query=query, entity=ent, facts=facts, relations=relations)
+    # 가격 근거 (ticker 한정 시) — PriceTick 사실에서 최신 종가·등락률·시계열
+    price: PriceEvidence | None = None
+    if ticker:
+        row = await repository.latest_price(session, ticker)
+        if row is not None:
+            ref_id, close, change_pct, series, source_url = row
+            price = PriceEvidence(
+                ticker=ticker, close=close, change_pct=change_pct,
+                series=series, source_url=source_url, ref_id=ref_id,
+            )
+    return SearchResponse(
+        query=query, entity=ent, facts=facts, relations=relations, price=price
+    )

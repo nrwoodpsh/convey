@@ -1,33 +1,150 @@
-"""content Kafka 소비 루프 — API 서비스에 붙는 consumer(원형에 없던 패턴, 갭#5).
+"""content Kafka 소비 — 근거 기반 쇼츠 오케스트레이션. 라운드⑤ (키 없는 경로).
 
-content는 HTTP API인 동시에 `content.generate`(및 미디어 완료 이벤트)를 구독해야 한다.
-lifespan에서 이 소비 루프를 백그라운드 태스크로 띄우고, 종료 시 취소한다.
-TODO(/design): 구독 토픽 집합(generate + image/tts/video 완료)·join 방식·핸들러 확정.
+content는 잡 상태머신을 소유하고, 두 흐름을 소비한다:
+  1) content.generate → scripting(agent 호출) → Script 저장 → media.assemble 발행
+  2) content.assembled(video-assembly 완료 fan-in) → Content 저장 → status=ready(사람 승인 대기)
+가드레일: 수치·인용은 agent가 사실에 결속(환각0). 발행은 사람 승인 후(별도).
 """
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from common.kafka import consume_forever
+import httpx
+from common.kafka import KafkaProducer, consume_forever
+from common.security import H_SIGNATURE, H_TIMESTAMP, H_USER_ID, sign_internal
 
 from app.config import settings
+from app.db import SessionLocal
+from app.domains.content.models import Content, GenerationJob, Script
+from app.domains.content.schemas import JobStatus
 
 logger = logging.getLogger("content.consumer")
 
 
-async def handle_generate(event: dict[str, Any]) -> None:
-    """content.generate 수신 → 생성 잡 시작. TODO(/builder): service.start_generation 연결."""
-    logger.info("content.generate 수신: %s", event)
-    # TODO(/builder): 잡 시작·단계 진행
+async def _set_status(job_id: int, status: JobStatus, **fields: Any) -> None:
+    """잡 상태 전이(+선택 필드). 잡 없으면 무시(로그)."""
+    async with SessionLocal() as session:
+        job = await session.get(GenerationJob, job_id)
+        if job is None:
+            logger.warning("잡 없음 job=%s", job_id)
+            return
+        job.status = status.value
+        for key, value in fields.items():
+            setattr(job, key, value)
+        await session.commit()
 
 
-async def run_consumer() -> None:
-    """lifespan 백그라운드 태스크 진입점."""
+async def _call_agent_script(job_id: int, topic: str, ticker: str | None) -> dict[str, Any]:
+    """agent /agent/script east-west 호출(HMAC 서명)."""
+    path = "/agent/script"
+    ts, sig = sign_internal(secret=settings.gateway_internal_secret, user_id="content", path=path)
+    headers = {H_USER_ID: "content", H_TIMESTAMP: ts, H_SIGNATURE: sig}
+    async with httpx.AsyncClient(timeout=300) as client:
+        resp = await client.post(
+            f"{settings.agent_url.rstrip('/')}{path}",
+            json={"job_id": job_id, "topic": topic, "ticker": ticker},
+            headers=headers,
+        )
+        resp.raise_for_status()
+        result: dict[str, Any] = resp.json()
+        return result
+
+
+async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> None:
+    """content.generate → scripting → Script 저장 → media.assemble 발행."""
+    job_id = int(event["job_id"])
+    topic = str(event["topic"])
+    ticker = event.get("ticker")
+    await _set_status(job_id, JobStatus.SCRIPTING)
+
+    try:
+        script_res = await _call_agent_script(job_id, topic, ticker)
+    except Exception as exc:  # noqa: BLE001 — 실패는 잡에 기록하고 계속(워커 생존)
+        await _set_status(job_id, JobStatus.FAILED, error=f"script: {exc}"[:500])
+        logger.exception("스크립트 생성 실패 job=%s", job_id)
+        return
+
+    # Script 저장
+    async with SessionLocal() as session:
+        script = Script(
+            job_id=job_id,
+            sections=script_res.get("sections", []),
+            citations=script_res.get("citations", []),
+        )
+        session.add(script)
+        await session.commit()
+        await session.refresh(script)
+        script_id = script.id
+
+    chart = script_res.get("chart")
+    if not chart:
+        await _set_status(job_id, JobStatus.FAILED, script_id=script_id, error="차트 근거 없음")
+        return
+
+    hook = next(
+        (s["text"] for s in script_res.get("sections", []) if s.get("kind") == "hook"), topic
+    )
+    await _set_status(job_id, JobStatus.ASSEMBLING, script_id=script_id)
+    await producer.publish(
+        settings.topic_assemble,
+        {"job_id": job_id, "chart": chart, "title": topic, "subtitle": hook, "duration": 6.0},
+        key=str(job_id),
+    )
+    logger.info("media.assemble 발행 job=%s script=%s", job_id, script_id)
+
+
+async def handle_assembled(event: dict[str, Any], producer: KafkaProducer) -> None:
+    """content.assembled(video-assembly 완료) → Content 저장 → status=ready."""
+    job_id = int(event["job_id"])
+    ok = bool(event.get("ok"))
+    mp4_path = event.get("mp4_path")
+    if not ok or not mp4_path:
+        await _set_status(job_id, JobStatus.FAILED, error=(str(event.get("error") or "합성 실패"))[:500])
+        logger.warning("합성 실패 job=%s: %s", job_id, event.get("error"))
+        return
+
+    async with SessionLocal() as session:
+        content = Content(job_id=job_id, mp4_path=str(mp4_path))
+        session.add(content)
+        await session.commit()
+        await session.refresh(content)
+        job = await session.get(GenerationJob, job_id)
+        if job is not None:
+            job.status = JobStatus.READY.value  # 내부 상태 — 사람 승인 대기
+            job.content_id = content.id
+            await session.commit()
+        content_id = content.id
+
+    await producer.publish(
+        settings.topic_ready, {"job_id": job_id, "content_id": content_id}, key=str(job_id)
+    )
+    logger.info("쇼츠 ready job=%s content=%s mp4=%s", job_id, content_id, mp4_path)
+
+
+async def run_consumer(producer: KafkaProducer) -> None:
+    """lifespan 백그라운드 — content.generate 소비."""
+
+    async def handler(event: dict[str, Any]) -> None:
+        await handle_generate(event, producer)
+
     await consume_forever(
         topic=settings.topic_generate,
-        group_id=settings.consumer_group,
+        group_id=f"{settings.consumer_group}-generate",
         bootstrap=settings.kafka_bootstrap,
-        handler=handle_generate,
+        handler=handler,
     )
-    # TODO(/design): 미디어 완료 토픽(image/tts/video)도 함께 구독해 fan-in 처리
+
+
+async def run_assembled_consumer(producer: KafkaProducer) -> None:
+    """lifespan 백그라운드 — content.assembled(fan-in) 소비."""
+
+    async def handler(event: dict[str, Any]) -> None:
+        await handle_assembled(event, producer)
+
+    await consume_forever(
+        topic=settings.topic_assembled,
+        group_id=f"{settings.consumer_group}-assembled",
+        bootstrap=settings.kafka_bootstrap,
+        handler=handler,
+    )

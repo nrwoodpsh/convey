@@ -27,6 +27,22 @@ def format_price(close: float, change_pct: float) -> tuple[str, str]:
     return f"{close:,.0f}원", f"{change_pct:+.2f}%"
 
 
+def render_title_card(title: str, out_path: str) -> str:
+    """키 없는 배경 — 외부 broll 대신 로컬 생성 타이틀 카드(9:16 다크). 켄번즈 base로 사용.
+
+    외부 API 없이 배경을 만든다(ADR 0006·0008 — broll/TTS는 키 발급 후). 경로 반환.
+    """
+    fig, ax = plt.subplots(figsize=(9, 16), dpi=120)
+    fig.patch.set_facecolor("#0d1b2a")
+    ax.set_facecolor("#0d1b2a")
+    ax.text(0.5, 0.5, title, transform=ax.transAxes, ha="center", va="center",
+            fontsize=34, color="#e0e1dd", wrap=True)
+    ax.axis("off")
+    fig.savefig(out_path, facecolor=fig.get_facecolor())
+    plt.close(fig)
+    return out_path
+
+
 def render_chart(overlay: ChartOverlay, out_path: str) -> str:
     """쇼츠 세로 프레임에 시세 차트 + 정확 수치 오버레이를 렌더해 PNG 저장. 경로 반환."""
     close_text, change_text = format_price(overlay.close, overlay.change_pct)

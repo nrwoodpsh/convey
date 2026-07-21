@@ -19,8 +19,18 @@ class RelationHit(BaseModel):
     source_url: str  # 가드레일
 
 
+class PriceEvidence(BaseModel):
+    ticker: str
+    close: float
+    change_pct: float  # 직전 거래일 대비 등락률(%)
+    series: list[float] = Field(default_factory=list)  # 차트용 종가 시계열(정확 값)
+    source_url: str  # 가드레일: 무출처 금지
+    ref_id: int  # PriceTick id
+
+
 class SearchResponse(BaseModel):
     query: str
     entity: str | None = None
     facts: list[FactHit] = Field(default_factory=list)
     relations: list[RelationHit] = Field(default_factory=list)
+    price: PriceEvidence | None = None  # ticker 한정 시 가격 근거(라운드⑤)

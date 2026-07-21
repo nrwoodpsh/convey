@@ -67,6 +67,36 @@ async def fact_search(
     return [(row[0], row[1], row[2]) for row in rows]
 
 
+def price_source_url(ticker: str) -> str:
+    """가격 사실의 공개 출처(무출처 금지 가드레일). 시세는 KRX(pykrx) 산출 — 공개 확인 페이지."""
+    return f"https://finance.naver.com/item/main.naver?code={ticker}"
+
+
+async def latest_price(
+    session: AsyncSession, ticker: str, *, window: int = 30
+) -> tuple[int, float, float, list[float], str] | None:
+    """종목 최신 시세 근거 → (ref_id, close, change_pct, series, source_url) 또는 None.
+
+    최근 `window`개 종가를 오름차순 시계열로, 등락률은 직전 거래일 대비. 값 조작 없이 실측만.
+    """
+    rows = (
+        await session.execute(
+            select(PriceTick.id, PriceTick.ts, PriceTick.close)
+            .where(PriceTick.ticker == ticker)
+            .order_by(PriceTick.ts.desc())
+            .limit(window)
+        )
+    ).all()
+    if not rows:
+        return None
+    rows = list(reversed(rows))  # 시간 오름차순
+    series = [float(r[2]) for r in rows]
+    last_id = int(rows[-1][0])
+    close = series[-1]
+    change_pct = (close - series[-2]) / series[-2] * 100 if len(series) >= 2 and series[-2] else 0.0
+    return last_id, close, change_pct, series, price_source_url(ticker)
+
+
 async def source_urls_for(session: AsyncSession, ids: list[int]) -> dict[int, str]:
     """기사 id → source_url. 그래프 관계의 근거 기사 URL 해석에 사용."""
     if not ids:
