@@ -5,6 +5,7 @@ description = "정확한 차트·수치 오버레이 렌더 + ffmpeg 합성 → 
 requires-python = ">=3.11"
 dependencies = [
     "matplotlib>=3.8",
+    "edge-tts>=6.1",  # TTS(무료·키없음·한국어) — 로컬·서버 공통. torch 불요
     "common",
 ]
 

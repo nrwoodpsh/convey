@@ -1,20 +1,19 @@
-"""로컬 TTS — macOS `say`(무료·오프라인). 없으면 무음 폴백. 라운드⑩.
+"""TTS — edge-tts(Microsoft Edge 뉴럴, 무료·키없음·한국어). 로컬·서버 공통. 라운드⑪.
 
-외부 API·키 없음(커모디티를 로컬로). 컨테이너(Linux)엔 `say`가 없어 NullEngine(무음).
-Piper 등 크로스플랫폼 엔진은 동일 인터페이스로 교체 가능(후속).
-가드레일: 원문 전체를 외부로 넘기지 않음 — 로컬 프로세스로만 합성.
+보편적으로 쓰이는 무료 TTS. torch 등 무거운 의존성 없음. 크로스플랫폼(Mac·Linux 동일).
+온라인(MS Edge 음성 서비스) — TTS는 커모디티(외주 허용), 내레이션 텍스트만 전송(원문 전체 아님).
+가드레일: import·네트워크·합성 실패 시 예외 대신 None(무음) — 파이프라인 절대 안 깨짐.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-import shutil
-import subprocess
 
 logger = logging.getLogger("video-assembly")
 
 
 class TtsEngine:
-    """텍스트 → 오디오 파일 경로(또는 None=무음). 실패해도 예외 대신 None(파이프라인 보호)."""
+    """텍스트 → 오디오 파일 경로(또는 None=무음)."""
 
     def synthesize(self, text: str, out_path: str) -> str | None:
         raise NotImplementedError
@@ -27,28 +26,32 @@ class NullEngine(TtsEngine):
         return None
 
 
-class SayEngine(TtsEngine):
-    """macOS `say` — 한국어 음성(기본 Yuna). aiff 산출(ffmpeg가 aac로 합성)."""
+class EdgeEngine(TtsEngine):
+    """edge-tts — 한국어 뉴럴 음성(기본 ko-KR-SunHiNeural). mp3 산출(ffmpeg가 aac로 합성)."""
 
-    def __init__(self, voice: str = "Yuna") -> None:
+    def __init__(self, voice: str = "ko-KR-SunHiNeural") -> None:
         self._voice = voice
 
     def synthesize(self, text: str, out_path: str) -> str | None:
         clean = text.strip()
         if not clean:
             return None
-        aiff = out_path if out_path.endswith(".aiff") else f"{out_path}.aiff"
+        import edge_tts  # 지연 import(미설치·모듈오류 시 make_engine에서 이미 Null 선택)
+
+        mp3 = out_path if out_path.endswith(".mp3") else f"{out_path}.mp3"
         try:
-            subprocess.run(
-                ["say", "-v", self._voice, clean, "-o", aiff],
-                check=True, capture_output=True,
-            )
-        except (subprocess.CalledProcessError, OSError) as exc:  # 실패 → 무음 폴백
-            logger.warning("say TTS 실패 → 무음: %s", exc)
+            # 동기 컨텍스트(worker의 to_thread 스레드)에서 async save 실행
+            asyncio.run(edge_tts.Communicate(clean, self._voice).save(mp3))
+        except Exception as exc:  # noqa: BLE001 — 온라인 실패도 무음 폴백(파이프라인 보호)
+            logger.warning("edge-tts 합성 실패 → 무음: %s", exc)
             return None
-        return aiff
+        return mp3
 
 
-def make_engine(voice: str = "Yuna") -> TtsEngine:
-    """`say` 있으면 SayEngine, 없으면 NullEngine(무음). 파이프라인은 어느 쪽이든 동작."""
-    return SayEngine(voice) if shutil.which("say") else NullEngine()
+def make_engine(voice: str = "ko-KR-SunHiNeural") -> TtsEngine:
+    """edge-tts 사용 가능하면 EdgeEngine, 아니면 NullEngine(무음). 어느 쪽이든 파이프라인 동작."""
+    try:
+        import edge_tts  # noqa: F401
+    except ImportError:
+        return NullEngine()
+    return EdgeEngine(voice)
