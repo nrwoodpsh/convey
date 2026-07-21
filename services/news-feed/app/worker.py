@@ -39,7 +39,13 @@ async def _news_loop(producer: KafkaProducer) -> None:
         len(feed_urls), bool(settings.naver_client_id), bool(settings.dart_api_key),
     )
     while True:
-        docs = rss.fetch() + naver.search(queries) + dart.fetch_recent()
+        # 동기 클라이언트(feedparser·httpx)를 스레드로 — 이벤트 루프 비블로킹 + 병렬 수집
+        rss_docs, naver_docs, dart_docs = await asyncio.gather(
+            asyncio.to_thread(rss.fetch),
+            asyncio.to_thread(naver.search, queries),
+            asyncio.to_thread(dart.fetch_recent),
+        )
+        docs = rss_docs + naver_docs + dart_docs
         for doc in docs:
             if not doc.get("source_url"):
                 continue  # 가드레일: 무출처 제외
@@ -63,7 +69,12 @@ async def _macro_loop(producer: KafkaProducer) -> None:
         "macro 루프 ecos=%s fred=%s", bool(settings.ecos_api_key), bool(settings.fred_api_key)
     )
     while True:
-        indicators = ecos.fetch(settings.ecos_indicators) + fred.fetch(settings.fred_indicators)
+        # 동기 httpx 호출을 스레드로 — 이벤트 루프 비블로킹 + 병렬 수집
+        ecos_rows, fred_rows = await asyncio.gather(
+            asyncio.to_thread(ecos.fetch, settings.ecos_indicators),
+            asyncio.to_thread(fred.fetch, settings.fred_indicators),
+        )
+        indicators = ecos_rows + fred_rows
         for ind in indicators:
             if not ind.get("source_url"):
                 continue  # 가드레일

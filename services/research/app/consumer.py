@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -93,7 +93,11 @@ async def handle_macro(event: dict[str, Any], session: AsyncSession) -> tuple[in
         logger.warning("무출처 거시 이벤트 스킵: %s", event.get("name"))
         return -1, False
     as_of_raw = event.get("as_of")
-    as_of = datetime.fromisoformat(as_of_raw) if isinstance(as_of_raw, str) else datetime.now()
+    as_of = (
+        datetime.fromisoformat(as_of_raw)
+        if isinstance(as_of_raw, str)
+        else datetime.now(timezone.utc)
+    )
     return await upsert_macro(
         session,
         name=str(event["name"]),
