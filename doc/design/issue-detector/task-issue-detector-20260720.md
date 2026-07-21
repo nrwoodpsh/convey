@@ -50,3 +50,4 @@
 |:---|:---|:---|
 | 20260720 | /design | 최초 설계 — 워커+조회API, 가중합 랭킹 (알파2) |
 | 20260720 | /builder | `RollingRanker`(가중합·롤링윈도우) + worker(두 스트림 소비) + main(`GET /issues/today`) 구현. gateway `/issues`·compose 등록. **랭킹 결정론 단위 4 pass**(정렬·윈도우·z-score)·mypy clean. 스트림 소비·API는 구조적 배선(Kafka e2e 후속). |
+| 20260721 | /builder(실 스트림 e2e) | **실 Kafka 스트림 관통 검증**(코드 변경 없음). 실 KRX ticks(005930/000660/035420) + 실 RSS 뉴스(035420 태깅)를 발행 → worker가 새 그룹으로 전부 소비(earliest) → `RollingRanker`. 랭킹(24h): ①005930 등락 +2.62%·vol_z 1.0, ②035420 news=2. **윈도우 필터 정확**(005930 뉴스는 24h 밖=0, 720h=1). "Kafka e2e 후속" 해소. |

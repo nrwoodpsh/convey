@@ -10,7 +10,45 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domains.research.models import Article
+from app.domains.research.models import Article, PriceTick
+
+
+async def upsert_price_tick(
+    session: AsyncSession,
+    *,
+    ticker: str,
+    ts: datetime,
+    open_: float,
+    high: float,
+    low: float,
+    close: float,
+    volume: int,
+) -> tuple[int, bool]:
+    """market.ticks → PriceTick 멱등 저장. 반환 (id, created).
+
+    market-feed가 같은 일봉을 반복 발행하므로 (ticker, ts) 동일하면 OHLCV만 갱신(장중 값
+    수렴), 없으면 삽입. 가드레일: 값 조작 없이 이벤트 실측 그대로 저장.
+    """
+    existing = (
+        await session.execute(
+            select(PriceTick).where(PriceTick.ticker == ticker, PriceTick.ts == ts)
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        existing.open = open_
+        existing.high = high
+        existing.low = low
+        existing.close = close
+        existing.volume = volume
+        await session.commit()
+        return existing.id, False
+    tick = PriceTick(
+        ticker=ticker, ts=ts, open=open_, high=high, low=low, close=close, volume=volume
+    )
+    session.add(tick)
+    await session.commit()
+    await session.refresh(tick)
+    return tick.id, True
 
 
 async def fact_search(

@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from neo4j import GraphDatabase
 
 from app.config import settings
-from app.consumer import run_consumer
+from app.consumer import run_consumer, run_tick_consumer
 from app.domains.research.router import router as research_router
 
 configure_logging(settings.log_level)
@@ -25,10 +25,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     user, _, pw = settings.neo4j_auth.partition("/")
     app.state.neo4j = GraphDatabase.driver(settings.neo4j_url, auth=(user, pw))
     consumer_task = asyncio.create_task(run_consumer())  # research.ingested 백그라운드 소비
+    tick_task = asyncio.create_task(run_tick_consumer())  # market.ticks → PriceTick 백그라운드 소비
     try:
         yield
     finally:
         consumer_task.cancel()
+        tick_task.cancel()
         await producer.stop()
         app.state.neo4j.close()
 

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import SessionLocal
 from app.domains.research.models import Article
+from app.domains.research.repository import upsert_price_tick
 from app.extract.relations import extract_relations
 from app.graph.neo4j_repo import GraphRepo
 
@@ -64,6 +65,25 @@ async def handle_ingested(
     return article.id, len(relations)
 
 
+async def handle_tick(event: dict[str, Any], session: AsyncSession) -> tuple[int, bool]:
+    """market.ticks 1건 처리 → PriceTick 멱등 저장(사실). 반환 (price_tick_id, created).
+
+    시세는 사실(Postgres)로만 저장 — 그래프/LLM 미경유(수치는 만들지 않음, 가드레일).
+    """
+    ts_raw = event.get("ts")
+    ts = datetime.fromisoformat(ts_raw) if isinstance(ts_raw, str) else datetime.now()
+    return await upsert_price_tick(
+        session,
+        ticker=event["ticker"],
+        ts=ts,
+        open_=float(event["open"]),
+        high=float(event["high"]),
+        low=float(event["low"]),
+        close=float(event["close"]),
+        volume=int(event["volume"]),
+    )
+
+
 def _llm_caller() -> Callable[[str], str]:
     """관계추출용 LLM 호출 — llm-inference 경유(로컬 Ollama). 게이트웨이 HMAC 신뢰헤더 서명."""
 
@@ -98,6 +118,24 @@ async def run_consumer() -> None:
     await consume_forever(
         topic=settings.topic_ingested,
         group_id=settings.consumer_group,
+        bootstrap=settings.kafka_bootstrap,
+        handler=handler,
+    )
+
+
+async def run_tick_consumer() -> None:
+    """lifespan 백그라운드 진입점 — market.ticks를 소비해 PriceTick(사실) 멱등 저장.
+
+    시세 스트림은 그래프/LLM을 거치지 않는다(사실만). market-feed(pykrx) → 여기 → research_db.
+    """
+
+    async def handler(event: dict[str, Any]) -> None:
+        async with SessionLocal() as session:
+            await handle_tick(event, session)
+
+    await consume_forever(
+        topic=settings.topic_ticks,
+        group_id=f"{settings.consumer_group}-ticks",
         bootstrap=settings.kafka_bootstrap,
         handler=handler,
     )
