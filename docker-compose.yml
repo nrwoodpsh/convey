@@ -141,6 +141,10 @@ services:
   video-assembly:
     build: {context: ., dockerfile: services/video-assembly/Dockerfile}
     <<: *python-env
+    environment:
+      MEDIA_DIR: /data/media
+    volumes:
+      - media:/data/media   # mp4 산출(쓰기) → content·publishing 공유
     depends_on:
       kafka: {condition: service_healthy}
 
@@ -149,6 +153,8 @@ services:
     <<: *python-env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/content_db
+    volumes:
+      - media:/data/media   # 완성본 경로 기록·공유(읽기)
     depends_on:
       postgres: {condition: service_healthy}
       kafka: {condition: service_healthy}
@@ -160,6 +166,8 @@ services:
     <<: *python-env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/publishing_db
+    volumes:
+      - media:/data/media   # 업로드 시 mp4 읽기(발행 라운드)
     depends_on:
       postgres: {condition: service_healthy}
       kafka: {condition: service_healthy}
@@ -175,3 +183,4 @@ volumes:
   pgdata:
   neo4jdata:
   ollama:
+  media:   # video-assembly 산출 mp4 — content·publishing 공유(ADR 0006 로컬 볼륨)
