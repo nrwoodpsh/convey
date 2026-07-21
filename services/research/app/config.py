@@ -10,6 +10,8 @@ class Settings(BaseAppSettings):
     topic_ingested: str = "research.ingested"
     # 시세 스트림(market-feed pykrx) → PriceTick 사실 저장
     topic_ticks: str = "market.ticks"
+    # 거시 스트림(news-feed ECOS·FRED) → MacroIndicator 사실 저장
+    topic_macro: str = "research.macro"
 
     # 지식 그래프 — 관계·인과(Neo4j, ADR 0005)
     neo4j_url: str = "bolt://neo4j:7687"

@@ -39,3 +39,24 @@ class PriceTick(Base):
     low: Mapped[float] = mapped_column(Float)
     close: Mapped[float] = mapped_column(Float)
     volume: Mapped[int] = mapped_column(BigInteger)
+
+
+class MacroIndicator(Base):
+    """거시 지표(ECOS·FRED) — 사실. 그래프 미경유(Postgres). 라운드⑥ (ADR 0008).
+
+    가드레일: source_url 필수(무출처 금지). 값은 API 실측 그대로(조작 0).
+    멱등: 같은 (name, as_of, source)는 1행(반복 폴링 중복 방지).
+    """
+
+    __tablename__ = "macro_indicators"
+    __table_args__ = (
+        UniqueConstraint("name", "as_of", "source", name="uq_macro_name_asof_source"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), index=True)
+    value: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(40), default="")
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    source: Mapped[str] = mapped_column(String(20))  # 'ECOS' | 'FRED'
+    source_url: Mapped[str] = mapped_column(String(500))  # 가드레일: 필수

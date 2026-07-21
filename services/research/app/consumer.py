@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import SessionLocal
 from app.domains.research.models import Article
-from app.domains.research.repository import upsert_price_tick
+from app.domains.research.repository import upsert_macro, upsert_price_tick
 from app.extract.relations import extract_relations
 from app.graph.neo4j_repo import GraphRepo
 
@@ -84,6 +84,27 @@ async def handle_tick(event: dict[str, Any], session: AsyncSession) -> tuple[int
     )
 
 
+async def handle_macro(event: dict[str, Any], session: AsyncSession) -> tuple[int, bool]:
+    """research.macro 1건 처리 → MacroIndicator 멱등 저장(사실). 반환 (id, created).
+
+    거시는 그래프/LLM 미경유(사실만). 가드레일: source_url 없으면 저장 안 함.
+    """
+    if not event.get("source_url"):
+        logger.warning("무출처 거시 이벤트 스킵: %s", event.get("name"))
+        return -1, False
+    as_of_raw = event.get("as_of")
+    as_of = datetime.fromisoformat(as_of_raw) if isinstance(as_of_raw, str) else datetime.now()
+    return await upsert_macro(
+        session,
+        name=str(event["name"]),
+        value=float(event["value"]),
+        unit=str(event.get("unit", "")),
+        as_of=as_of,
+        source=str(event["source"]),
+        source_url=str(event["source_url"]),
+    )
+
+
 def _llm_caller() -> Callable[[str], str]:
     """관계추출용 LLM 호출 — llm-inference 경유(로컬 Ollama). 게이트웨이 HMAC 신뢰헤더 서명."""
 
@@ -136,6 +157,24 @@ async def run_tick_consumer() -> None:
     await consume_forever(
         topic=settings.topic_ticks,
         group_id=f"{settings.consumer_group}-ticks",
+        bootstrap=settings.kafka_bootstrap,
+        handler=handler,
+    )
+
+
+async def run_macro_consumer() -> None:
+    """lifespan 백그라운드 진입점 — research.macro를 소비해 MacroIndicator(사실) 멱등 저장.
+
+    거시 스트림은 그래프/LLM을 거치지 않는다(사실만). news-feed(ECOS·FRED) → 여기 → research_db.
+    """
+
+    async def handler(event: dict[str, Any]) -> None:
+        async with SessionLocal() as session:
+            await handle_macro(event, session)
+
+    await consume_forever(
+        topic=settings.topic_macro,
+        group_id=f"{settings.consumer_group}-macro",
         bootstrap=settings.kafka_bootstrap,
         handler=handler,
     )

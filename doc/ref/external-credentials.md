@@ -8,12 +8,18 @@ CONVEY 외부 연동에 필요한 키·계정 목록과 **발급 방법 + 확인
 
 | # | 자격증명 | 용도(라운드) | 키 필요? | .env 키 |
 |:--|:---|:---|:--:|:---|
+| 0 | (없음) pykrx 시세 | 시세(R①) | ❌ 키 없음 | — (KRX 공개, ADR 0008) |
 | 0 | (없음) 공개 RSS | 뉴스 수집(R①) | ❌ 키 없음 | `FEED_URLS` |
-| 1 | KIS OpenAPI | 시세(R①) | ✅ | `KIS_APP_KEY`·`KIS_APP_SECRET`·`KIS_ACCOUNT` |
-| 2 | Supabase | 인증(R0) | ✅ | `SUPABASE_URL`·`SUPABASE_AUD` |
-| 3 | 이미지 생성 API | broll(R④) | ✅ | `IMAGE_GEN_BASE_URL`·`IMAGE_GEN_API_KEY` |
-| 4 | TTS API | 음성(R④) | ✅ | `TTS_BASE_URL`·`TTS_API_KEY` |
-| 5 | YouTube Data API | 발행(R⑤) | ✅ | `YOUTUBE_CLIENT_ID`·`YOUTUBE_CLIENT_SECRET`·`YOUTUBE_REFRESH_TOKEN` |
+| 1 | DART | 공시(R⑥) | ✅ 무료 | `DART_API_KEY` |
+| 2 | 네이버 검색 | 뉴스검색(R⑥) | ✅ 무료 | `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET` |
+| 3 | ECOS(한국은행) | 거시-국내(R⑥) | ✅ 무료 | `ECOS_API_KEY` |
+| 4 | FRED(미 연준) | 거시-미국(R⑥) | ✅ 무료 | `FRED_API_KEY` |
+| 5 | Supabase | 인증(R0) | ✅ 무료 | `SUPABASE_URL`·`SUPABASE_JWKS_URL`·`SUPABASE_AUD` |
+| 6 | YouTube Data API | 발행(R⑤) | ✅ 무료 | `YOUTUBE_CLIENT_ID`·`YOUTUBE_CLIENT_SECRET`·`YOUTUBE_REFRESH_TOKEN` |
+| 7 | 이미지 생성 API | broll(R④) | ✅ 유료 | `IMAGE_GEN_BASE_URL`·`IMAGE_GEN_API_KEY` |
+| 8 | TTS API | 음성(R④) | 로컬 무료/유료 | `TTS_BASE_URL`·`TTS_API_KEY` (로컬 엔진 시 불요) |
+
+> KIS OpenAPI는 ADR 0008로 **폐기**(pykrx 대체). 시세는 키 불필요.
 
 ---
 
@@ -107,10 +113,30 @@ CONVEY 외부 연동에 필요한 키·계정 목록과 **발급 방법 + 확인
 | Neo4j(로컬 컨테이너) | ✅ `NEO4J_AUTH=neo4j/convey-dev-pw` |
 | Postgres·Kafka(로컬 컨테이너) | ✅ 5432 · 29092 |
 
+## 소스 4종 발급·확인 (R⑥ — 전부 무료)
+
+### DART (공시) — `DART_API_KEY`
+1. opendart.fss.or.kr → 회원가입 → **인증키 신청/관리 → 인증키 신청**(즉시 발급, 40자리)
+2. 확인: `https://opendart.fss.or.kr/api/list.json?crtfc_key=키&page_count=1` → `status`가 `000`이면 정상
+
+### 네이버 검색(뉴스) — `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET`
+1. developers.naver.com → 애플리케이션 등록 → **사용 API "검색"** 선택(웹 서비스 URL은 `http://localhost` 가능 — 실제 도메인 불필요)
+2. 확인: `curl -H "X-Naver-Client-Id: ID" -H "X-Naver-Client-Secret: SECRET" "https://openapi.naver.com/v1/search/news.json?query=삼성전자&display=1"` → `items` 반환
+   - 데이터랩(검색어트렌드)은 **다른 API**(이슈 신호용) — 뉴스 근거는 "검색"
+
+### ECOS (한국은행 거시) — `ECOS_API_KEY`
+1. ecos.bok.or.kr → 회원가입 → **OpenAPI → 인증키 신청**(즉시)
+2. 확인: `https://ecos.bok.or.kr/api/StatisticSearch/키/json/kr/1/1/722Y001/M/202501/202501` → 기준금리 행
+   - 주기별 날짜 포맷 주의: D=YYYYMMDD, M=YYYYMM, Y=YYYY. 응답은 오름차순.
+
+### FRED (미 연준 거시) — `FRED_API_KEY`
+1. fred.stlouisfed.org → My Account → `fredaccount.stlouisfed.org/apikeys` → **Request API Key**(즉시, 32자리)
+2. 확인: `https://api.stlouisfed.org/fred/series/observations?series_id=DFF&api_key=키&file_type=json&limit=1&sort_order=desc`
+
 ## 착수 순서 권장
 
-1. **RSS**(키 없음) → news-feed 실수집으로 파이프라인 입구 완성.
-2. **KIS** → 실 시세 `market.ticks`.
-3. **Supabase** → 실제 인증(비대칭 JWT 키 활성화 필수).
-4. **이미지·TTS** → 미디어 자산.
-5. **YouTube** → 발행(승인 게이트 후).
+1. **RSS**(키 없음) + **pykrx**(키 없음) → 파이프라인 입구 완성. ✅ 완료
+2. **DART·네이버·ECOS·FRED**(무료) → 근거 소스 확장(R⑥). ✅ 완료
+3. **Supabase**(무료) → 실제 인증(비대칭 JWT 키 활성화 필수). 멀티유저/공개 시.
+4. **YouTube**(무료) → 발행(승인 게이트 후). TTS는 로컬 엔진(무료) 권장.
+5. **이미지 생성**(유료) → broll. 없으면 로컬 타이틀 카드.

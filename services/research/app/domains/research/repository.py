@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domains.research.models import Article, PriceTick
+from app.domains.research.models import Article, MacroIndicator, PriceTick
 
 
 async def upsert_price_tick(
@@ -68,8 +68,11 @@ async def fact_search(
 
 
 def price_source_url(ticker: str) -> str:
-    """가격 사실의 공개 출처(무출처 금지 가드레일). 시세는 KRX(pykrx) 산출 — 공개 확인 페이지."""
-    return f"https://finance.naver.com/item/main.naver?code={ticker}"
+    """가격 사실의 공개 출처(무출처 금지 가드레일). 시세 원천 = KRX(pykrx) — 정보데이터시스템.
+
+    데이터 실제 출처가 KRX이므로 KRX 표기로 통일(라운드⑥ 정정, 네이버 아님).
+    """
+    return f"http://data.krx.co.kr/?isu_cd={ticker}"
 
 
 async def latest_price(
@@ -95,6 +98,44 @@ async def latest_price(
     close = series[-1]
     change_pct = (close - series[-2]) / series[-2] * 100 if len(series) >= 2 and series[-2] else 0.0
     return last_id, close, change_pct, series, price_source_url(ticker)
+
+
+async def upsert_macro(
+    session: AsyncSession,
+    *,
+    name: str,
+    value: float,
+    unit: str,
+    as_of: datetime,
+    source: str,
+    source_url: str,
+) -> tuple[int, bool]:
+    """거시 지표 멱등 저장 → (id, created). 같은 (name, as_of, source)면 값 갱신, 없으면 삽입.
+
+    값은 이벤트 실측 그대로(조작 0). 반복 폴링 중복 방지.
+    """
+    existing = (
+        await session.execute(
+            select(MacroIndicator).where(
+                MacroIndicator.name == name,
+                MacroIndicator.as_of == as_of,
+                MacroIndicator.source == source,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        existing.value = value
+        existing.unit = unit
+        existing.source_url = source_url
+        await session.commit()
+        return existing.id, False
+    row = MacroIndicator(
+        name=name, value=value, unit=unit, as_of=as_of, source=source, source_url=source_url
+    )
+    session.add(row)
+    await session.commit()
+    await session.refresh(row)
+    return row.id, True
 
 
 async def source_urls_for(session: AsyncSession, ids: list[int]) -> dict[int, str]:

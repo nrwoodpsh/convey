@@ -143,6 +143,21 @@ class ResearchIngestedEvent(BaseModel):
     event_hints: list[str] = Field(default_factory=list, description="사건 후보(실적·공시 등)")
 
 
+# 거시 지표(ECOS·FRED) 발행 — news-feed(거시 루프) → research 저장(MacroIndicator). 라운드⑥ (ADR 0008)
+TOPIC_RESEARCH_MACRO = "research.macro"
+
+
+class MacroIndicatorEvent(BaseModel):
+    """거시 사실 1건. MacroIndicator(사실 모델)과 1:1. 그래프 미경유(Postgres 사실)."""
+
+    name: str  # 예: '한국은행 기준금리' · '원달러환율' · '연방기금금리'
+    value: float
+    unit: str = ""  # 예: '연%' · '원'
+    as_of: datetime  # UTC (지표 기준시점)
+    source: str  # 'ECOS' | 'FRED'
+    source_url: str  # 가드레일: 무출처 금지
+
+
 # ── 5) 에러 레지스트리 (libs/common/common/errors.py와 정합) ──
 class ResearchError(tuple[str, int, str], Enum):
     INVALID_PARAM = ("RES001", 400, "요청 파라미터가 유효하지 않습니다.")
