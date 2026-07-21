@@ -51,6 +51,25 @@ async def _call_agent_script(job_id: int, topic: str, ticker: str | None) -> dic
         return result
 
 
+def _narration(sections: list[dict[str, Any]]) -> str:
+    """스크립트 섹션 → 내레이션 문장(로컬 TTS가 읽음). chart 슬롯({close} 등)은 사실값으로 해소.
+
+    수치는 이미 사실 슬롯(환각 무관) — 그대로 읽어도 안전.
+    """
+    parts: list[str] = []
+    for sec in sections:
+        text = str(sec.get("text", ""))
+        slots = sec.get("data_slots") or {}
+        if sec.get("kind") == "chart" and slots:
+            try:
+                text = text.format(**slots)  # "{close}"→실제 종가 등
+            except (KeyError, IndexError, ValueError):
+                pass
+        if text.strip():
+            parts.append(text.strip())
+    return " ".join(parts)
+
+
 async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> None:
     """content.generate → scripting → Script 저장 → media.assemble 발행."""
     job_id = int(event["job_id"])
@@ -82,13 +101,16 @@ async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> Non
         await _set_status(job_id, JobStatus.FAILED, script_id=script_id, error="차트 근거 없음")
         return
 
-    hook = next(
-        (s["text"] for s in script_res.get("sections", []) if s.get("kind") == "hook"), topic
-    )
+    sections = script_res.get("sections", [])
+    hook = next((s["text"] for s in sections if s.get("kind") == "hook"), topic)
+    narration = _narration(sections)
     await _set_status(job_id, JobStatus.ASSEMBLING, script_id=script_id)
     await producer.publish(
         settings.topic_assemble,
-        {"job_id": job_id, "chart": chart, "title": topic, "subtitle": hook, "duration": 6.0},
+        {
+            "job_id": job_id, "chart": chart, "title": topic,
+            "subtitle": hook, "narration": narration, "duration": 6.0,
+        },
         key=str(job_id),
     )
     logger.info("media.assemble 발행 job=%s script=%s", job_id, script_id)

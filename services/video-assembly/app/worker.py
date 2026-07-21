@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import subprocess
 from typing import Any
 
 from common.kafka import KafkaProducer, consume_forever
@@ -16,6 +17,20 @@ from common.logging import configure_logging
 from app.assemble import build_short
 from app.config import settings
 from app.render import ChartOverlay, render_chart, render_title_card
+from app.tts import make_engine
+
+
+def _audio_duration(path: str) -> float | None:
+    """오디오 길이(초) — ffprobe. 실패 시 None."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            check=True, capture_output=True, text=True,
+        )
+        return float(out.stdout.strip())
+    except (subprocess.CalledProcessError, OSError, ValueError):
+        return None
 
 configure_logging(settings.log_level)
 logger = logging.getLogger("video-assembly")
@@ -27,6 +42,7 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
     chart = event["chart"]
     title = str(event.get("title", ""))
     subtitle = str(event.get("subtitle", ""))
+    narration = str(event.get("narration", "")) or subtitle
     duration = float(event.get("duration", 6.0))
 
     os.makedirs(settings.media_dir, exist_ok=True)
@@ -42,8 +58,15 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
         )
         await asyncio.to_thread(render_chart, overlay, chart_png)
         await asyncio.to_thread(render_title_card, title, bg_png)
+        # 로컬 TTS(무료·say) — 없으면 무음. 음성 있으면 영상 길이를 음성에 맞춤.
+        audio_path = await asyncio.to_thread(make_engine().synthesize, narration, f"{base}-tts")
+        if audio_path:
+            audio_dur = _audio_duration(audio_path)
+            if audio_dur:
+                duration = max(duration, audio_dur)
         await asyncio.to_thread(
-            build_short, bg_png, chart_png, out_mp4, duration=duration, subtitle=subtitle
+            build_short, bg_png, chart_png, out_mp4,
+            duration=duration, audio_path=audio_path, subtitle=subtitle,
         )
     except Exception as exc:  # noqa: BLE001 — 실패도 회신(잡을 failed로)
         await producer.publish(
