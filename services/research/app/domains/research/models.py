@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Float, String, Text, func
+from sqlalchemy import BigInteger, DateTime, Float, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -28,6 +28,8 @@ class Article(Base):
 
 class PriceTick(Base):
     __tablename__ = "price_ticks"
+    # 멱등 저장: 같은 종목·거래일은 1행(장중 갱신). market-feed 반복 발행 중복 방지.
+    __table_args__ = (UniqueConstraint("ticker", "ts", name="uq_price_ticks_ticker_ts"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     ticker: Mapped[str] = mapped_column(String(20), index=True)

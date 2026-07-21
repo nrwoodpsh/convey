@@ -66,6 +66,16 @@ docker compose up -d postgres neo4j kafka   # 인프라(필요 서비스만)
 docker compose up -d --build  # 전체(앱 포함)
 ```
 
+**DB 스키마(Alembic — Postgres 테이블):** 서비스는 시작 시 테이블을 만들지 않는다. 각 DB에 한 번씩 마이그레이션을 적용한다(신규 환경).
+```bash
+# research·content·publishing 각각(해당 서비스 폴더에서, DB URL은 로컬 기준)
+cd services/research && DATABASE_URL=postgresql+asyncpg://app:app@localhost:5432/research_db python -m alembic upgrade head
+cd services/content   && DATABASE_URL=postgresql+asyncpg://app:app@localhost:5432/content_db   python -m alembic upgrade head
+cd services/publishing && DATABASE_URL=postgresql+asyncpg://app:app@localhost:5432/publishing_db python -m alembic upgrade head
+# 이미 테이블이 있는(초기 create_all로 만든) DB는 upgrade 대신 stamp로 베이스라인만 표시:
+#   python -m alembic stamp head   (단 research_db의 price_ticks (ticker,ts) UNIQUE는 없으면 별도 추가)
+```
+
 **검증 재현(로컬, 서비스 미기동 상태에서 모듈 직접):**
 ```bash
 # 예: research 단위테스트 / 실 스택 스크립트는 PYTHONPATH로 common+서비스 경로 주입
