@@ -109,10 +109,13 @@ TOPIC_RESEARCH_INGESTED = "research.ingested"  # news-feed 발행 → research·
 
 class MarketTickEvent(BaseModel):
     ticker: str
-    ts: datetime  # UTC
+    ts: datetime  # UTC (거래일)
+    open: float
+    high: float
+    low: float
     close: float
     volume: int
-    source: str = "KIS"
+    source: str = "KRX"  # pykrx(무료·키X) 실측 — ADR 0008 (KIS 제외)
 
 
 class ResearchIngestedEvent(BaseModel):

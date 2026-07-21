@@ -43,7 +43,7 @@
    - **사실 저장**: `Article`(Postgres) + 출처/라이선스 (필수)
    - **관계추출**: 로컬 LLM(Ollama)에 [기사 + 태깅 종목] → `(subject, edge, object)` 후보. 각 후보는 근거 기사에 결속. **태깅/기사 범위 밖 엔티티·수치는 폐기**(환각 방지)
    - **그래프 upsert**: 노드·엣지 생성, 엣지에 `source_article_id`
-3. `market-feed`: KIS 시세 → `market.ticks` → `research`가 `PriceTick` 저장
+3. `market-feed`: **pykrx 시세**(무료·키X, ADR 0008) → `market.ticks`(OHLCV) → `research`가 `PriceTick` 저장
 
 **`/research/search` (GraphRAG)**
 1. `q`/`ticker` → 종목 노드 해석(없으면 `ENTITY_NOT_FOUND`)
@@ -90,3 +90,4 @@
 | 20260720 | /builder(전송 e2e) | Kafka 외부 리스너(compose `PLAINTEXT_HOST`=localhost:29092) 추가. **실 Kafka 파이프라인 관통 검증**: produce `research.ingested` → consume → `handle_ingested`(Article 저장 + LLM 관계추출 + 그래프). 전송 계층 "미검증" 해소. |
 | 20260720 | /design(ADR 0008) | 소스 재편 — 시세 **pykrx**(무료·키X), 콘텐츠 **뉴스(RSS)·공시(DART)·거시(ECOS/FRED)**. 계약에 `MacroIndicator`(거시 사실) 추가, 공시=Article/Event 흡수. KIS 제외. |
 | 20260720 | /builder(C) | news-feed **실 RSS 수집**(feedparser) + DART 클라이언트(무료키 필요·없으면 스킵) → 규칙 태깅 → `research.ingested`. **실 연합뉴스/한경 RSS → Kafka → research 저장 e2e 검증**("이해진…젠슨황" 기사에 네이버 035420 자동태깅, research_db Article 누적). mypy clean. 남음: DART 키·pykrx 시세·거시(ECOS/FRED). |
+| 20260721 | /builder(pykrx) · Deviation | market-feed mock(KIS) → **pykrx 실 KRX 시세**(무료·키X, ADR 0008). `KrxMarketClient.latest_ohlcv`(일봉 창 조회→최신 거래일 실측, 동기호출은 `asyncio.to_thread`로 격리), worker가 OHLCV tick 발행. config에서 KIS 필드 제거·`lookback_days` 추가. **계약 이탈**: `MarketTickEvent`에 `open/high/low` 추가(PriceTick 채움), 기본 `source` `KIS`→`KRX`. **실 KRX+실 Kafka e2e 검증**(005930/000660/035420 실측→`market.ticks` produce→consume, payload 동일). mypy·contract-gate clean. 남음: research의 `market.ticks` 소비→PriceTick 저장(별도 라운드). |

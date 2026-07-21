@@ -1,11 +1,11 @@
 [project]
 name = "market-feed-service"
 version = "0.1.0"
-description = "외부 시세 연동 워커 (예: KIS) → Kafka 발행. HTTP 없음, 게이트웨이 뒤 아님."
+description = "외부 시세 연동 워커 (pykrx 실 KRX 시세) → Kafka 발행. HTTP 없음, 게이트웨이 뒤 아님."
 requires-python = ">=3.11"
 dependencies = [
     "common",
-    "httpx>=0.27",
+    "pykrx>=1.0.45",  # KRX 공개 시세(무료·키X) — ADR 0008
 ]
 
 [build-system]
