@@ -51,6 +51,7 @@ async def handle_ingested(
         license=event["license"],
         published_at=published_at,
         lang=event.get("lang", "ko"),
+        tickers=list(event.get("tickers", [])),  # 태깅 종목 영속 → 종목 기준 회수(라운드⑧)
     )
     session.add(article)
     await session.commit()

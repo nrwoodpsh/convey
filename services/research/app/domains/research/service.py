@@ -32,8 +32,22 @@ async def search(
     window_days: int | None = None,
 ) -> SearchResponse:
     """그래프 관계(Neo4j, 최대 hops홉) + SQL 사실(Postgres, window_days 기간)을 합쳐 근거를 반환."""
-    # 사실 (Postgres SQL)
-    fact_rows = await repository.fact_search(session, query, top_k, window_days=window_days)
+    # 사실 (Postgres SQL) — ticker 있으면 종목 태깅 기사 우선 + 키워드 보충(dedup, 라운드⑧)
+    if ticker:
+        by_ticker = await repository.fact_search_by_ticker(
+            session, ticker, top_k, window_days=window_days
+        )
+        by_keyword = await repository.fact_search(session, query, top_k, window_days=window_days)
+        seen: set[int] = set()
+        fact_rows: list[tuple[int, str, str]] = []
+        for fr in [*by_ticker, *by_keyword]:
+            if fr[0] in seen:
+                continue
+            seen.add(fr[0])
+            fact_rows.append(fr)
+        fact_rows = fact_rows[:top_k]
+    else:
+        fact_rows = await repository.fact_search(session, query, top_k, window_days=window_days)
     facts = [
         FactHit(kind="article", text=title, source_url=url, ref_id=aid)
         for (aid, title, url) in fact_rows

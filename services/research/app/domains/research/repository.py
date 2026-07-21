@@ -159,6 +159,24 @@ async def latest_macros(
     return [(r[0], r[1], r[2], r[3], r[4], r[5], r[6]) for r in rows]
 
 
+async def fact_search_by_ticker(
+    session: AsyncSession, ticker: str, top_k: int, *, window_days: int | None = None
+) -> list[tuple[int, str, str]]:
+    """종목 태깅 기사 회수 — `tickers @> [ticker]`(JSONB). 검색어 문자열과 무관하게 정확 회수.
+
+    반환 (id, title, source_url). 최신순.
+    """
+    stmt = select(Article.id, Article.title, Article.source_url).where(
+        Article.tickers.contains([ticker])
+    )
+    if window_days is not None:
+        since = datetime.now(timezone.utc) - timedelta(days=window_days)
+        stmt = stmt.where(Article.published_at >= since)
+    stmt = stmt.order_by(Article.published_at.desc()).limit(top_k)
+    rows = (await session.execute(stmt)).all()
+    return [(row[0], row[1], row[2]) for row in rows]
+
+
 async def source_urls_for(session: AsyncSession, ids: list[int]) -> dict[int, str]:
     """기사 id → source_url. 그래프 관계의 근거 기사 URL 해석에 사용."""
     if not ids:

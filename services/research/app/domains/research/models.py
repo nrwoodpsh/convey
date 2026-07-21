@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, Float, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -23,6 +24,8 @@ class Article(Base):
     license: Mapped[str] = mapped_column(String(200))  # 가드레일: 필수(NOT NULL)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     lang: Mapped[str] = mapped_column(String(8), default="ko")
+    # 규칙 태깅된 종목 코드(라운드⑧) — 종목 기준 기사 회수. JSONB @> 컨테인먼트.
+    tickers: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
