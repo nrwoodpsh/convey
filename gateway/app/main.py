@@ -58,11 +58,13 @@ async def health() -> dict[str, str]:
 
 
 def _resolve(path: str) -> tuple[str, str] | None:
-    """path → (target_base, downstream_path). prefix 제거 후 하류 경로 생성."""
+    """path → (target_base, downstream_path). 하류 라우터가 도메인 prefix를 그대로 쓰므로
+    **prefix를 제거하지 않고 전체 경로를 넘긴다**(예: /content/generate → base + /content/generate).
+    HMAC 서명 경로도 이 전체 경로라 하류 `request.url.path`와 일치한다.
+    """
     for prefix, base in settings.routes.items():
         if path == prefix or path.startswith(prefix + "/"):
-            downstream = path[len(prefix):] or "/"
-            return base, downstream
+            return base, path
     return None
 
 
