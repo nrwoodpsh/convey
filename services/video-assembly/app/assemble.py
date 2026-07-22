@@ -5,7 +5,12 @@
 """
 from __future__ import annotations
 
+import os
 import subprocess
+
+# 자막 한글 폰트(번들 NanumGothic) — render.py와 동일 파일. 없으면 drawtext 기본(tofu 위험).
+_FONT = os.path.join(os.path.dirname(__file__), "assets", "NanumGothic.ttf")
+_FONTFILE = f"fontfile={_FONT}:" if os.path.exists(_FONT) else ""
 
 
 def build_short(
@@ -31,7 +36,7 @@ def build_short(
     if subtitle:
         safe = subtitle.replace("\\", "").replace(":", r"\:").replace("'", "")
         vf += (
-            f";[v]drawtext=text='{safe}':fontcolor=white:fontsize=42:box=1:"
+            f";[v]drawtext={_FONTFILE}text='{safe}':fontcolor=white:fontsize=48:box=1:"
             "boxcolor=black@0.5:boxborderw=12:x=(w-text_w)/2:y=h-240[v]"
         )
     cmd = ["ffmpeg", "-y", "-loop", "1", "-i", image_path, "-loop", "1", "-i", chart_png]
@@ -69,7 +74,7 @@ def build_short_video(
     if subtitle:
         safe = subtitle.replace("\\", "").replace(":", r"\:").replace("'", "")
         vf += (
-            f";[v]drawtext=text='{safe}':fontcolor=white:fontsize=42:box=1:"
+            f";[v]drawtext={_FONTFILE}text='{safe}':fontcolor=white:fontsize=48:box=1:"
             "boxcolor=black@0.5:boxborderw=12:x=(w-text_w)/2:y=h-240[v]"
         )
     cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", video_path, "-loop", "1", "-i", chart_png]

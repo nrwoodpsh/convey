@@ -20,5 +20,9 @@ class Settings(BaseAppSettings):
     pexels_api_key: str = ""
     broll_mode: str = "video"
 
+    # 쇼츠 목표 길이(㉑) — 음성 짧아도 최소, 1분 이내 상한
+    min_duration: float = 24.0
+    max_duration: float = 55.0
+
 
 settings = Settings()

@@ -65,7 +65,9 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
         if audio_path:
             audio_dur = _audio_duration(audio_path)
             if audio_dur:
-                duration = max(duration, audio_dur)
+                duration = audio_dur
+        # 쇼츠 목표 길이(㉑): 음성이 짧아도 최소 확보, 1분 이내 상한. 짧으면 배경 지속.
+        duration = min(max(duration, settings.min_duration), settings.max_duration)
         # broll 배경(Pexels) — video/photo, 실패 시 로컬 카드 폴백
         broll = await asyncio.to_thread(
             PexelsClient(settings.pexels_api_key).fetch,
