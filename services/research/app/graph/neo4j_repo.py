@@ -9,10 +9,30 @@ from typing import Any
 
 from app.extract.relations import EDGE_TYPES
 
+# 종목명 → 티커. 이름이 이 사전에 있으면 노드에 :Stock 라벨 + ticker 속성(PriceTick 연계, 라운드⑲).
+# 전체 4타입(Event/Sector/Company) 분류는 후속. POC 소규모 사전(news-feed TICKER_DICT와 별개).
+_STOCK_BY_NAME: dict[str, str] = {
+    "삼성전자": "005930",
+    "SK하이닉스": "000660",
+    "현대차": "005380",
+    "LG에너지솔루션": "373220",
+    "네이버": "035420",
+    "카카오": "035720",
+}
+
 
 class GraphRepo:
     def __init__(self, driver: Any) -> None:
         self._driver = driver
+
+    def _label_stock(self, name: str) -> None:
+        """이름이 알려진 종목이면 노드에 :Stock 라벨 + ticker 속성(기존 :Entity 유지, 멀티라벨)."""
+        ticker = _STOCK_BY_NAME.get(name)
+        if ticker is None:
+            return
+        self._driver.execute_query(
+            "MATCH (n:Entity {name: $n}) SET n:Stock, n.ticker = $t", n=name, t=ticker
+        )
 
     def upsert_relation(
         self, subject: str, edge: str, obj: str, *, source_article_id: int
@@ -26,6 +46,8 @@ class GraphRepo:
             "SET r.source_article_id = $aid"
         )
         self._driver.execute_query(query, s=subject, o=obj, aid=source_article_id)
+        self._label_stock(subject)  # 종목이면 :Stock 라벨·ticker
+        self._label_stock(obj)
 
     def relations_of(
         self, name: str, *, hops: int = 1, limit: int = 25
