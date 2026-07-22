@@ -52,9 +52,22 @@ async def _call_agent_script(job_id: int, topic: str, ticker: str | None) -> dic
         return result
 
 
-# broll 배경 검색어 — Pexels 커버리지상 영문 금융 키워드가 안정적(POC).
-# 섹터→영문 매핑은 후속(라운드⑫ History).
-_BROLL_QUERY = "stock market"
+# broll 배경 검색어 — 종목→영문 섹터 키워드 매핑(라운드⑯). Pexels 커버리지상 영문.
+# 미지 종목은 기본어. POC 주요 종목(확장은 후속).
+_BROLL_MAP: dict[str, str] = {
+    "005930": "semiconductor",        # 삼성전자
+    "000660": "semiconductor",        # SK하이닉스
+    "035420": "internet technology",  # 네이버
+    "035720": "internet technology",  # 카카오
+    "005380": "automobile factory",   # 현대차
+    "373220": "battery factory",      # LG에너지솔루션
+}
+_BROLL_DEFAULT = "stock market"
+
+
+def _broll_query(ticker: str | None) -> str:
+    """종목 코드 → broll 배경 검색어(영문 섹터 키워드). 미지/없음은 기본어."""
+    return _BROLL_MAP.get(ticker or "", _BROLL_DEFAULT)
 
 
 def _clip(text: str, max_chars: int) -> str:
@@ -131,7 +144,7 @@ async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> Non
         {
             "job_id": job_id, "chart": chart, "title": topic,
             "subtitle": hook, "narration": narration,
-            "broll_query": _BROLL_QUERY, "duration": 6.0,
+            "broll_query": _broll_query(ticker), "duration": 6.0,
         },
         key=str(job_id),
     )
