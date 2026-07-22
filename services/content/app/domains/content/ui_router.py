@@ -80,8 +80,12 @@ def _to_script_view(script: Script | None) -> ScriptView:
 
 @router.get("/")
 async def dashboard() -> FileResponse:
-    """정적 대시보드 셸."""
-    return FileResponse(_INDEX_HTML, media_type="text/html")
+    """정적 대시보드 셸. 캐시 금지(재빌드 시 브라우저가 옛 FE를 붙잡지 않게)."""
+    return FileResponse(
+        _INDEX_HTML,
+        media_type="text/html",
+        headers={"Cache-Control": "no-store, must-revalidate"},
+    )
 
 
 @router.get("/ui/articles", response_model=ArticleListRes)

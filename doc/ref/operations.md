@@ -68,15 +68,27 @@ docker exec -it py-msa-ai-starter-kafka-1 \
 
 ## 4. 쇼츠 생성 → YouTube 수동 업로드
 
+**방법 A — 대시보드(권장, 라운드㉔)**: `http://localhost:8091` → `오늘자 기사` 탭에서 기사 선택 → 템플릿 → 시나리오 수정 → 배경(실사/애니) → 생성 → 미리보기. `생성쇼츠` 탭에서 완료본 확인.
+
+**영상 저장 위치**: DB가 아니라 도커 공유 볼륨 `py-msa-ai-starter_media`(컨테이너 `/data/media/job-{N}.mp4`). `content_db.contents.mp4_path`엔 경로만. 다운로드:
+```bash
+# 브라우저: http://localhost:8091/ui/contents/{content_id}/video  (mp4 바로 받기)
+docker compose cp content:/data/media/job-22.mp4 ./out/     # 특정 잡
+docker compose cp content:/data/media/. ./out/media/        # 전부
+```
+
+**방법 B — 스크립트(자동 경로)**:
 ```bash
 scripts/generate.sh 035420      # issue.selected 발행 → 자동 생성 → ready → out/ 추출
 # → out/convey-035420-job<id>.mp4  (h264 9:16 + 한국어 음성 + Pexels 배경 + 정확 차트)
 ```
-- **발행(업로드)은 사람이** — 파이프라인은 완성본(mp4)까지만 자동(가드레일: 콘텐츠 자동 발행 금지). 생성된 `out/*.mp4`를 확인 후 YouTube에 직접 업로드.
+- **발행(업로드)은 사람이** — 파이프라인은 완성본(mp4)까지만 자동(가드레일: 콘텐츠 자동 발행 금지). 확인 후 YouTube에 직접 업로드.
 - 종목별 배경: `_BROLL_MAP`(content). 시세 데이터 없는 종목은 스크립트 생성이 실패할 수 있음(pykrx 수집 후 재시도).
 - **중복회피**: 같은 종목을 최근 1일 내 이미 생성했으면 자동 경로는 skip(수동 `POST /content/generate`는 무조건 생성).
 
 ## 5. 트러블슈팅
 - `generate.sh` 타임아웃: `docker compose logs content agent research`로 스크립트/합성 단계 확인. 시세 없는 종목·Ollama 미기동이 흔한 원인.
 - 게이트웨이 401: 인증(Supabase)은 보류(C2). 내부 검증은 로컬 JWKS 시뮬(`doc/summary/20260722-summary-gateway-e2e.md`).
-- 전체 초기화(데이터 삭제): `docker compose down -v` (주의: DB·미디어 전부 삭제).
+- 데이터 초기화: `scripts/reset-data.sh`(잡·영상만, 기사 유지) · `--all`(기사·시세·그래프까지) · `--nuke`(볼륨 완전 삭제 안내). 전체 초기화는 `docker compose down -v`(DB·미디어 전부 삭제).
+- 대시보드 화면이 옛 버전으로 보이면 강력 새로고침(⌘⇧R). 응답은 `no-store`라 보통은 최신이 뜬다.
+- 시나리오 생성은 Ollama 추론으로 ~30초 소요(멈춘 것 아님). 종목 미태깅 기사는 시세 근거가 없어 제작 불가(대시보드에서 `진행` 비활성).

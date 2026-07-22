@@ -17,7 +17,7 @@
     background:radial-gradient(900px 500px at 85% -10%,#2a0a10 0%,transparent 55%),
       radial-gradient(800px 500px at -10% 110%,#1c1405 0%,transparent 50%),var(--bg);
     background-attachment:fixed}
-  .wrap{max-width:1120px;margin:0 auto;padding:24px 22px 80px}
+  .wrap{max-width:100%;margin:0;padding:24px 34px 80px}
   header.top{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
   header.top h1{font-size:24px;letter-spacing:5px;margin:0;font-weight:800}
   header.top h1 .c{color:var(--red)} header.top h1 .dot{color:var(--gold)}
@@ -265,10 +265,14 @@ async function loadArticles(){
   const box=$("#arts");
   if(!data.length){box.innerHTML=`<div class="empty">오늘 수집된 기사가 없습니다.</div>`;return;}
   box.innerHTML=data.map(a=>{
-    const stk=a.name?`<span class="stk">◈ ${esc(a.name)}</span> · `:"";
+    const tagged=!!a.ticker;
+    const stk=a.name?`<span class="stk">◈ ${esc(a.name)}</span> · `:`<span style="color:#c96">종목 미태깅(제작 불가)</span> · `;
+    const btn=tagged
+      ? `<button class="act" data-title="${esc(a.title)}" data-ticker="${esc(a.ticker)}" data-aid="${a.article_id}">진행 ▶</button>`
+      : `<button class="ghost" disabled title="종목이 태깅된 기사만 제작 가능(시세 근거 필요)">진행 ✕</button>`;
     return `<div class="art"><div class="info"><div class="t">${esc(a.title)}</div>
       <div class="sub">${stk}${esc(fmt(a.published_at))} · <a href="${esc(a.source_url)}" target="_blank" rel="noopener" style="color:var(--mut)">${esc(host(a.source_url))}</a></div></div>
-      <button class="act" data-title="${esc(a.title)}" data-ticker="${esc(a.ticker||"")}" data-aid="${a.article_id}">진행 ▶</button></div>`;
+      ${btn}</div>`;
   }).join("");
   box.querySelectorAll("button.act").forEach(b=>b.onclick=()=>{
     wz.article={title:b.dataset.title, ticker:b.dataset.ticker||null, article_id:+b.dataset.aid};
@@ -287,9 +291,10 @@ $("#genBtn").onclick=async()=>{
       body:JSON.stringify({title:wz.article.title,ticker:wz.article.ticker,article_id:wz.article.article_id,template:wz.template})});
     if(!r.ok) throw new Error(r.status);
     wz.job=(await r.json()).job_id;
+    editSections=[]; editShownFor=null;  // 새 초안 — 에디터 재그리기
     toast(`시나리오 생성 시작 · job #${wz.job}`);
-    goStep(3); $("#editArea").innerHTML=`<div class="loading">시나리오 생성 중… (${wz.template})</div>`;
-    ensurePolling();
+    goStep(3); $("#editArea").innerHTML=`<div class="loading">시나리오 생성 중… (${wz.template}) — 최대 30초쯤 걸립니다.</div>`;
+    ensurePolling(); loadJobs();  // 2.5초 기다리지 말고 즉시 한 번 폴링
   }catch(e){toast("생성 실패: "+e.message,true);}
   finally{btn.disabled=false; btn.textContent="시나리오 생성 ▶";}
 };
@@ -334,15 +339,18 @@ $("#approveBtn").onclick=async()=>{
     ensurePolling();
   }catch(e){toast("승인 실패: "+e.message,true); btn.disabled=false; btn.textContent="승인 → 쇼츠 생성 ▶";}
 };
-$("#restartBtn").onclick=()=>{wz.article=null;wz.job=null;$("#wplayer").removeAttribute("src");goStep(1);loadArticles();};
+$("#restartBtn").onclick=()=>{wz.article=null;wz.job=null;editSections=[];editShownFor=null;$("#wplayer").removeAttribute("src");goStep(1);loadArticles();};
 
 // 마법사 잡 상태 반영(폴링)
+let editShownFor=null;  // 에디터를 그려준 job_id(중복/누락 방지)
 function refreshWizard(){
   if(wz.job==null) return;
   const job=items.find(i=>i.job_id===wz.job);
   if(!job) return;
   if(job.status==="failed"){ if(wz.step===3)$("#editArea").innerHTML=`<div class="loading">생성 실패: ${esc(job.error||"")}</div>`; if(wz.step===5)$("#wmeta").innerHTML=`<div class="loading">합성 실패: ${esc(job.error||"")}</div>`; return; }
-  if(wz.step===3 && job.status==="scenario_ready" && !editSections.length) showEditor();
+  if(wz.step===3){
+    if(job.status==="scenario_ready" && editShownFor!==wz.job){ editShownFor=wz.job; showEditor(); }
+  }
   if(wz.step===5 && DONE.has(job.status) && job.content_id!=null && !$("#wplayer").src){
     playInto("#wplayer","#wmeta", job.content_id, job.topic, job.name);
   }
