@@ -47,3 +47,20 @@ class SearchResponse(BaseModel):
     relations: list[RelationHit] = Field(default_factory=list)
     price: PriceEvidence | None = None  # ticker 한정 시 가격 근거(라운드⑤)
     macros: list[MacroHit] = Field(default_factory=list)  # 거시 맥락(각 name별 최신, 라운드⑦)
+
+
+class ArticleItem(BaseModel):
+    """수집 기사 1건 — 대시보드 선택 대상(라운드㉓). 출처 필수(가드레일)."""
+
+    article_id: int
+    title: str
+    source_url: str  # 가드레일: 무출처 금지
+    published_at: datetime  # UTC
+    ticker: str | None = None  # 태깅된 대표 종목(tickers[0])
+    name: str | None = None  # 종목 한글명(공유 사전 common.stocks)
+
+
+class ArticleListResponse(BaseModel):
+    """수집 기사 목록 — 최신순(published_at desc)."""
+
+    items: list[ArticleItem] = Field(default_factory=list)

@@ -22,6 +22,8 @@ class GenerationJob(Base):
     topic: Mapped[str] = mapped_column(String(200))
     ticker: Mapped[str | None] = mapped_column(String(20), nullable=True)
     owner_id: Mapped[str] = mapped_column(String(64))
+    # 차트 근거(agent 산출) — 승인 게이트(㉓): scenario_ready 동안 보존했다가 승인 시 합성에 재사용
+    chart: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     script_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     content_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error: Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from app.config import settings
 from app.consumer import run_assembled_consumer, run_consumer, run_issue_consumer
 from app.domains.content.router import router as content_router
+from app.domains.content.ui_router import router as ui_router
 
 configure_logging(settings.log_level)
 
@@ -38,6 +39,8 @@ app = FastAPI(title="content", lifespan=lifespan)
 register_exception_handlers(app)
 
 app.include_router(content_router)
+# 운영 대시보드(무인증, 로컬 전용 — ADR 0010·0011). gateway 우회 호스트 포트로만 접근.
+app.include_router(ui_router)
 
 
 @app.get("/health")

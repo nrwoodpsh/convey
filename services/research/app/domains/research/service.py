@@ -7,16 +7,38 @@ from __future__ import annotations
 
 import asyncio
 
+from common.stocks import stock_name
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.research import repository
 from app.domains.research.schemas import (
+    ArticleItem,
+    ArticleListResponse,
     FactHit,
     MacroHit,
     PriceEvidence,
     RelationHit,
     SearchResponse,
 )
+
+
+async def list_articles(
+    session: AsyncSession, *, window_days: int = 1, limit: int = 50
+) -> ArticleListResponse:
+    """수집 기사 목록(대시보드 선택용, 라운드㉓) — 최신순. 대표 종목(tickers[0])·한글명 부여."""
+    rows = await repository.list_articles(session, window_days=window_days, limit=limit)
+    items = [
+        ArticleItem(
+            article_id=aid,
+            title=title,
+            source_url=url,
+            published_at=published_at,
+            ticker=(tickers[0] if tickers else None),
+            name=stock_name(tickers[0] if tickers else None),
+        )
+        for (aid, title, url, published_at, tickers) in rows
+    ]
+    return ArticleListResponse(items=items)
 from app.graph.neo4j_repo import GraphRepo
 
 

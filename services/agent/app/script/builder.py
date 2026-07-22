@@ -9,6 +9,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TypedDict
 
+from common.stocks import stock_name
+
 
 class PriceEvidence(TypedDict):
     ticker: str
@@ -67,6 +69,10 @@ def build_script(
     ticker = price["ticker"]
     close = str(price["close"])
     change = f"{price['change_pct']:.2f}"
+    # 종목은 코드가 아니라 한글명으로 노출(㉓ — 시나리오·내레이션·자막에서 코드 낭독 제외).
+    # 사전 밖이면 접두 생략(없는 이름 지어내지 않음 — 환각 금지).
+    name = stock_name(ticker)
+    stock_prefix = f"{name} " if name else ""
 
     # 연결 문장(LLM) — 숫자 없이 prose만. 수치는 아래 chart 슬롯에서만.
     hook = llm(f"'{topic}' 주식 쇼츠 도입 문장 1개. 숫자·수치는 쓰지 말 것. 한 문장.").strip()
@@ -75,7 +81,7 @@ def build_script(
         ScriptSection("hook", hook),
         ScriptSection(
             "chart",
-            f"{ticker} 종가 {{close}}원, 등락률 {{change_pct}}%",
+            f"{stock_prefix}종가 {{close}}원, 등락률 {{change_pct}}%",
             {"ticker": ticker, "close": close, "change_pct": change},
         ),
     ]

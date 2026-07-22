@@ -30,6 +30,8 @@ class ChartOverlay:
     close: float
     change_pct: float
     series: list[float] = field(default_factory=list)
+    title: str = ""  # 쇼츠 제목(주제) — 최상단 큰 제목
+    stock_label: str = ""  # 종목 라벨 '현대차(005380)' — 코드만 나오지 않게. 비면 ticker 사용
 
 
 def format_price(close: float, change_pct: float) -> tuple[str, str]:
@@ -51,19 +53,25 @@ def render_title_card(title: str, out_path: str) -> str:
 
 
 def render_chart(overlay: ChartOverlay, out_path: str) -> str:
-    """차트+정확 수치를 **투명 1080×1920 PNG**로 렌더(배경 broll 위 오버레이). 레이아웃 존(㉑):
-    상단 제목 · 중앙 큰 라인차트 · 그 아래 대형 종가·등락률. 반투명 패널로 가독성.
+    """차트+정확 수치를 **투명 1080×1920 PNG**로 렌더(배경 broll 위 오버레이). 레이아웃 존(㉒):
+    상단 제목 · 그 아래 종목 라벨 '한글명(코드)' · 중앙 큰 라인차트 · 그 아래 대형 종가·등락률.
+    반투명 패널로 가독성. 종목은 코드만 나오지 않게 '현대차(005380)' 형태.
     """
     close_text, change_text = format_price(overlay.close, overlay.change_pct)
     color = "#ff5252" if overlay.change_pct >= 0 else "#448aff"  # 밝은 톤(어두운 배경 대비)
+    stock_text = overlay.stock_label or overlay.ticker  # 라벨 비면 코드 폴백
 
     fig = plt.figure(figsize=(9, 16), dpi=120)  # 1080×1920
     fig.patch.set_alpha(0.0)
 
-    # 상단: 종목명(큰 제목)
+    # 최상단: 쇼츠 제목(주제)
     title_box = {"boxstyle": "round,pad=0.5", "facecolor": "black", "alpha": 0.6, "edgecolor": "none"}
-    fig.text(0.5, 0.90, overlay.ticker, ha="center", va="center",
-             fontsize=52, color="white", weight="bold", bbox=title_box)
+    if overlay.title:
+        fig.text(0.5, 0.925, overlay.title, ha="center", va="center",
+                 fontsize=44, color="white", weight="bold", bbox=title_box, wrap=True)
+    # 그 아래: 종목 라벨 '한글명(코드)' (청록 강조)
+    fig.text(0.5, 0.86, stock_text, ha="center", va="center",
+             fontsize=40, color="#22e0ff", weight="bold", bbox=title_box)
 
     # 중앙: 큰 라인차트(정확 시계열)
     ax = fig.add_axes((0.10, 0.42, 0.80, 0.34))

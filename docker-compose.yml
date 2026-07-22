@@ -155,6 +155,7 @@ services:
     <<: *python-env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/content_db
+    ports: ["${DASHBOARD_PORT:-8091}:8000"]   # 운영 대시보드(무인증·로컬 전용 — ADR 0010). gateway 우회.
     volumes:
       - media:/data/media   # 완성본 경로 기록·공유(읽기)
     depends_on:

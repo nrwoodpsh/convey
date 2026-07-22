@@ -13,6 +13,7 @@ from typing import Any
 
 from common.kafka import KafkaProducer, consume_forever
 from common.logging import configure_logging
+from common.stocks import stock_label
 
 from app.assemble import build_short, build_short_video
 from app.broll import PexelsClient
@@ -58,6 +59,8 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
             close=float(chart["close"]),
             change_pct=float(chart["change_pct"]),
             series=[float(x) for x in chart.get("series", [])],
+            title=title,  # 최상단 제목(주제)
+            stock_label=stock_label(str(chart["ticker"])),  # '현대차(005380)' — 코드만 X
         )
         await asyncio.to_thread(render_chart, overlay, chart_png)  # 투명 오버레이
         # 로컬 TTS(무료) — 없으면 무음. 음성 있으면 영상 길이를 음성에 맞춤.

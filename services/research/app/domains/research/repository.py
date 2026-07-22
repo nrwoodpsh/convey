@@ -13,6 +13,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domains.research.models import Article, MacroIndicator, PriceTick
 
 
+async def list_articles(
+    session: AsyncSession, *, window_days: int, limit: int
+) -> list[tuple[int, str, str, datetime, list[str]]]:
+    """수집 기사 목록 — 최근 window_days, 최신순(published_at desc). 대시보드 선택용(㉓).
+
+    반환 (id, title, source_url, published_at, tickers). 출처 없는 건 제외(가드레일).
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=window_days)
+    stmt = (
+        select(Article.id, Article.title, Article.source_url, Article.published_at, Article.tickers)
+        .where(Article.published_at >= since, Article.source_url != "")
+        .order_by(Article.published_at.desc())
+        .limit(limit)
+    )
+    rows = (await session.execute(stmt)).all()
+    return [(r[0], r[1], r[2], r[3], list(r[4] or [])) for r in rows]
+
+
 async def upsert_price_tick(
     session: AsyncSession,
     *,

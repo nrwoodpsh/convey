@@ -31,6 +31,12 @@ scripts/restart.sh     # 재기동(배포)
 
 **Kafka 워커(헬스 X — HTTP 없음)**: `news-feed` · `market-feed` · `video-assembly`. 상태는 `docker compose ps` + 로그(`docker compose logs -f <svc>`)로 확인.
 
+### 운영 대시보드 (브라우저 — ADR 0010)
+- 접속: **`http://localhost:8091`** (content 직접 서빙, **무인증·로컬 전용** — gateway·Supabase 우회).
+- 사용: 제목·종목 입력 → **생성 시작** → 목록에서 진행 상태(자동 폴링) → 완료 시 **재생**(9:16 미리보기).
+- API: `POST /ui/generate` · `GET /ui/jobs` · `GET /ui/contents/{content_id}/video`(mp4·Range).
+- 유튜브 업로드는 여전히 사람이 수동(§4). 운영 배포 시엔 8091 비노출 권장.
+
 ## 3. DB·Kafka 접속 정보
 
 ### Postgres (사실: 시세·기사·거시·잡·스크립트·완성본)

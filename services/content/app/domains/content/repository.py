@@ -6,7 +6,10 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domains.content.models import Content, GenerationJob
+from common.stocks import stock_name
+
+from app.domains.content.models import Content, GenerationJob, Script
+from app.domains.content.schemas import JobListItem
 
 
 async def history_search(
@@ -48,3 +51,37 @@ async def recent_ticker_job(
     )
     count = (await session.execute(stmt)).scalar_one()
     return int(count) > 0
+
+
+async def list_jobs(session: AsyncSession, *, limit: int = 50) -> list[JobListItem]:
+    """최근 잡 목록 — 최신순(created_at desc). 대시보드 이력(ADR 0010)."""
+    stmt = select(GenerationJob).order_by(GenerationJob.created_at.desc()).limit(limit)
+    jobs = (await session.execute(stmt)).scalars().all()
+    return [
+        JobListItem(
+            job_id=j.id,
+            topic=j.topic,
+            ticker=j.ticker,
+            name=stock_name(j.ticker),  # 한글명(공유 사전) — 대시보드는 코드 대신 이름 표시
+            status=j.status,
+            content_id=j.content_id,
+            created_at=j.created_at.isoformat(),
+        )
+        for j in jobs
+    ]
+
+
+async def get_content(session: AsyncSession, content_id: int) -> Content | None:
+    """완성본(Content) 조회 — mp4 스트리밍 경로 확인용. 없으면 None."""
+    return await session.get(Content, content_id)
+
+
+async def get_script_by_job(session: AsyncSession, job_id: int) -> Script | None:
+    """잡의 스크립트(시나리오) 조회 — 미리보기용. 최신 1건. 없으면 None."""
+    stmt = (
+        select(Script)
+        .where(Script.job_id == job_id)
+        .order_by(Script.created_at.desc())
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalars().first()

@@ -27,6 +27,8 @@ class Settings(BaseAppSettings):
 
     # agent(스크립트 생성) east-west 호출
     agent_url: str = "http://agent:8000"
+    # research(오늘자 기사 목록, 대시보드 ㉓) east-west 호출
+    research_url: str = "http://research:8000"
 
 
 settings = Settings()

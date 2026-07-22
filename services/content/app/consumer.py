@@ -13,10 +13,11 @@ from typing import Any
 import httpx
 from common.kafka import KafkaProducer, consume_forever
 from common.security import H_SIGNATURE, H_TIMESTAMP, H_USER_ID, sign_internal
+from common.stocks import stock_name
 
 from app.config import settings
 from app.db import SessionLocal
-from app.domains.content import repository, service
+from app.domains.content import media, repository, service
 from app.domains.content.models import Content, GenerationJob, Script
 from app.domains.content.schemas import GenerateRequest, JobStatus
 
@@ -52,63 +53,16 @@ async def _call_agent_script(job_id: int, topic: str, ticker: str | None) -> dic
         return result
 
 
-# broll 배경 검색어 — 종목→영문 섹터 키워드 매핑(라운드⑯). Pexels 커버리지상 영문.
-# 미지 종목은 기본어. POC 주요 종목(확장은 후속).
-_BROLL_MAP: dict[str, str] = {
-    "005930": "semiconductor",        # 삼성전자
-    "000660": "semiconductor",        # SK하이닉스
-    "035420": "internet technology",  # 네이버
-    "035720": "internet technology",  # 카카오
-    "005380": "automobile factory",   # 현대차
-    "373220": "battery factory",      # LG에너지솔루션
-}
-_BROLL_DEFAULT = "stock market"
-
-
-def _broll_query(ticker: str | None) -> str:
-    """종목 코드 → broll 배경 검색어(영문 섹터 키워드). 미지/없음은 기본어."""
-    return _BROLL_MAP.get(ticker or "", _BROLL_DEFAULT)
-
-
-def _clip(text: str, max_chars: int) -> str:
-    """문자 예산 초과 시 문장/단어 경계에서 컷(음성이 중간에 안 끊기게)."""
-    if len(text) <= max_chars:
-        return text
-    head = text[:max_chars]
-    dot = max(head.rfind(". "), head.rfind("! "), head.rfind("? "), head.rfind("다. "))
-    if dot > 0:
-        return head[: dot + 1].strip()
-    space = head.rfind(" ")
-    return (head[:space] if space > 0 else head).strip()
-
-
-def _narration(sections: list[dict[str, Any]], max_chars: int) -> str:
-    """내레이션(음성 낭독용) — **핵심 섹션만 축약**(hook + chart 1 + 사실 1 + 거시 1), 문자 예산.
-
-    자막·인용(Script)은 전체 유지하고, **음성만 간결**하게(쇼츠 길이). chart 슬롯은 사실값 해소.
-    """
-    parts: list[str] = []
-    for kind in ("hook", "chart", "fact", "macro"):  # 각 종류 대표 1개만
-        sec = next((s for s in sections if s.get("kind") == kind), None)
-        if sec is None:
-            continue
-        text = str(sec.get("text", ""))
-        slots = sec.get("data_slots") or {}
-        if kind == "chart" and slots:
-            try:
-                text = text.format(**slots)  # "{close}"→실제 종가 등
-            except (KeyError, IndexError, ValueError):
-                pass
-        if text.strip():
-            parts.append(text.strip())
-    return _clip(" ".join(parts), max_chars)
-
-
 async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> None:
-    """content.generate → scripting → Script 저장 → media.assemble 발행."""
+    """content.generate → scripting → Script 저장.
+
+    auto=True(자동양산): 곧바로 media.assemble 발행(assembling). auto=False(대시보드 수동, ㉓):
+    chart 근거를 잡에 보존하고 scenario_ready에서 정지(사람 승인 대기). 승인은 approve_scenario.
+    """
     job_id = int(event["job_id"])
     topic = str(event["topic"])
     ticker = event.get("ticker")
+    auto = bool(event.get("auto", True))  # 값 없으면 안전값(기존 자동 경로)
     await _set_status(job_id, JobStatus.SCRIPTING)
 
     try:
@@ -136,18 +90,19 @@ async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> Non
         return
 
     sections = script_res.get("sections", [])
-    hook = next((s["text"] for s in sections if s.get("kind") == "hook"), topic)
-    narration = _narration(sections, settings.narration_max_chars)
-    await _set_status(job_id, JobStatus.ASSEMBLING, script_id=script_id)
-    await producer.publish(
-        settings.topic_assemble,
-        {
-            "job_id": job_id, "chart": chart, "title": topic,
-            "subtitle": hook, "narration": narration,
-            "broll_query": _broll_query(ticker), "duration": 6.0,
-        },
-        key=str(job_id),
+    if not auto:
+        # 수동(대시보드): 시나리오 승인 대기 — chart 보존, 합성 발행 안 함
+        await _set_status(job_id, JobStatus.SCENARIO_READY, script_id=script_id, chart=chart)
+        logger.info("시나리오 준비(승인 대기) job=%s script=%s", job_id, script_id)
+        return
+
+    # 자동(양산): 곧바로 합성
+    await _set_status(job_id, JobStatus.ASSEMBLING, script_id=script_id, chart=chart)
+    event_out = media.build_assemble_event(
+        job_id=job_id, topic=topic, ticker=ticker, chart=chart,
+        sections=sections, narration_max_chars=settings.narration_max_chars,
     )
+    await producer.publish(settings.topic_assemble, event_out, key=str(job_id))
     logger.info("media.assemble 발행 job=%s script=%s", job_id, script_id)
 
 
@@ -193,7 +148,8 @@ async def handle_issue(event: dict[str, Any], producer: KafkaProducer) -> None:
     ticker = str(event.get("ticker", ""))
     if not ticker:
         return
-    name = str(event.get("name") or ticker)
+    # 제목이 코드로 나오지 않게 한글명 우선(이벤트 name → 공유 사전 → 최후 코드)
+    name = str(event.get("name") or stock_name(ticker) or ticker)
     async with SessionLocal() as session:
         # 중복회피(A2): 같은 종목 최근 잡 있으면 skip (자동 양산 스팸 방지)
         if await repository.recent_ticker_job(
@@ -202,7 +158,8 @@ async def handle_issue(event: dict[str, Any], producer: KafkaProducer) -> None:
             logger.info("중복회피: ticker=%s 최근 잡 존재 → 자동 생성 skip", ticker)
             return
         req = GenerateRequest(topic=f"{name} 이슈", ticker=ticker)
-        job_id = await service.start_generation(session, producer, req, owner_id="auto")
+        # 자동양산(알파4)은 승인 게이트 없이 ready까지 무정지(auto=True)
+        job_id = await service.start_generation(session, producer, req, owner_id="auto", auto=True)
     logger.info("자동 양산 잡 생성 job=%s ticker=%s", job_id, ticker)
 
 
