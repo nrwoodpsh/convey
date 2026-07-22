@@ -57,23 +57,38 @@ async def _call_agent_script(job_id: int, topic: str, ticker: str | None) -> dic
 _BROLL_QUERY = "stock market"
 
 
-def _narration(sections: list[dict[str, Any]]) -> str:
-    """스크립트 섹션 → 내레이션 문장(로컬 TTS가 읽음). chart 슬롯({close} 등)은 사실값으로 해소.
+def _clip(text: str, max_chars: int) -> str:
+    """문자 예산 초과 시 문장/단어 경계에서 컷(음성이 중간에 안 끊기게)."""
+    if len(text) <= max_chars:
+        return text
+    head = text[:max_chars]
+    dot = max(head.rfind(". "), head.rfind("! "), head.rfind("? "), head.rfind("다. "))
+    if dot > 0:
+        return head[: dot + 1].strip()
+    space = head.rfind(" ")
+    return (head[:space] if space > 0 else head).strip()
 
-    수치는 이미 사실 슬롯(환각 무관) — 그대로 읽어도 안전.
+
+def _narration(sections: list[dict[str, Any]], max_chars: int) -> str:
+    """내레이션(음성 낭독용) — **핵심 섹션만 축약**(hook + chart 1 + 사실 1 + 거시 1), 문자 예산.
+
+    자막·인용(Script)은 전체 유지하고, **음성만 간결**하게(쇼츠 길이). chart 슬롯은 사실값 해소.
     """
     parts: list[str] = []
-    for sec in sections:
+    for kind in ("hook", "chart", "fact", "macro"):  # 각 종류 대표 1개만
+        sec = next((s for s in sections if s.get("kind") == kind), None)
+        if sec is None:
+            continue
         text = str(sec.get("text", ""))
         slots = sec.get("data_slots") or {}
-        if sec.get("kind") == "chart" and slots:
+        if kind == "chart" and slots:
             try:
                 text = text.format(**slots)  # "{close}"→실제 종가 등
             except (KeyError, IndexError, ValueError):
                 pass
         if text.strip():
             parts.append(text.strip())
-    return " ".join(parts)
+    return _clip(" ".join(parts), max_chars)
 
 
 async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> None:
@@ -109,7 +124,7 @@ async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> Non
 
     sections = script_res.get("sections", [])
     hook = next((s["text"] for s in sections if s.get("kind") == "hook"), topic)
-    narration = _narration(sections)
+    narration = _narration(sections, settings.narration_max_chars)
     await _set_status(job_id, JobStatus.ASSEMBLING, script_id=script_id)
     await producer.publish(
         settings.topic_assemble,
