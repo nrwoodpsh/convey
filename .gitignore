@@ -23,3 +23,6 @@ models/
 .DS_Store
 .idea/
 .vscode/
+
+# 생성 산출물(쇼츠 mp4 등) — 사람이 확인 후 수동 업로드
+out/

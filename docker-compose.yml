@@ -70,8 +70,11 @@ services:
       kafka:
         condition: service_healthy
 
+  # 기본 미기동 — 네이티브(호스트) ollama 재사용(11434 충돌 방지). 컨테이너로 쓰려면:
+  #   docker compose --profile ollama up -d ollama   (이 경우 .env OLLAMA_HOST=http://ollama:11434)
   ollama:
     image: ollama/ollama:latest
+    profiles: ["ollama"]
     volumes:
       - ollama:/root/.ollama
     ports: ["${OLLAMA_PORT:-11434}:11434"]
@@ -101,8 +104,7 @@ services:
   llm-inference:
     build: {context: ., dockerfile: services/llm-inference/Dockerfile}
     <<: *python-env
-    depends_on:
-      ollama: {condition: service_healthy}
+    # ollama는 네이티브 재사용(OLLAMA_HOST=host.docker.internal) — 컨테이너 의존 없음
 
   # AI 에이전트 오케스트레이션(prompts+tools+RAG+멀티턴). 모델은 llm-inference에 위임.
   agent:

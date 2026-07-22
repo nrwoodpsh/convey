@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -57,10 +58,18 @@ async def handle_ingested(
     await session.commit()
     await session.refresh(article)
 
+    # 동기 LLM 관계추출 + Neo4j upsert는 이벤트 루프를 막지 않게 스레드로 오프로드
+    # (HTTP /search가 소비 중에도 굶지 않도록 — 전체 기동 검증에서 발견한 블로킹 해소)
     entities = event.get("entities", [])
-    relations = extract_relations(event["body"], entities, llm) if entities else []
-    for rel in relations:
-        graph.upsert_relation(rel.subject, rel.edge, rel.object, source_article_id=article.id)
+    if entities:
+        relations = await asyncio.to_thread(extract_relations, event["body"], entities, llm)
+        for rel in relations:
+            await asyncio.to_thread(
+                graph.upsert_relation, rel.subject, rel.edge, rel.object,
+                source_article_id=article.id,
+            )
+    else:
+        relations = []
 
     logger.info("research.ingested 처리: article=%s relations=%s", article.id, len(relations))
     return article.id, len(relations)
