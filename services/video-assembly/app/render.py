@@ -44,17 +44,28 @@ def render_title_card(title: str, out_path: str) -> str:
 
 
 def render_chart(overlay: ChartOverlay, out_path: str) -> str:
-    """쇼츠 세로 프레임에 시세 차트 + 정확 수치 오버레이를 렌더해 PNG 저장. 경로 반환."""
-    close_text, change_text = format_price(overlay.close, overlay.change_pct)
-    color = "#d32f2f" if overlay.change_pct >= 0 else "#1565c0"
+    """차트+정확 수치를 **투명 배경 1080×1920 PNG**로 렌더(배경 broll 위 오버레이용). 경로 반환.
 
-    fig, ax = plt.subplots(figsize=(9, 16), dpi=60)  # 9:16 쇼츠
+    배경이 보이도록 투명 처리 + 차트·수치를 **하단부**에 배치(상단 70%는 배경 노출).
+    수치는 어떤 배경에서도 읽히게 반투명 다크 박스. dpi·figsize로 정확히 1080×1920.
+    """
+    close_text, change_text = format_price(overlay.close, overlay.change_pct)
+    color = "#ff5252" if overlay.change_pct >= 0 else "#448aff"  # 밝은 톤(어두운 배경 대비)
+
+    fig = plt.figure(figsize=(9, 16), dpi=120)  # 1080×1920
+    fig.patch.set_alpha(0.0)  # 투명 배경
+
+    # 하단 라인차트(정확 시계열)
+    ax = fig.add_axes((0.08, 0.05, 0.84, 0.15))
+    ax.axis("off")
     if overlay.series:
         ax.plot(overlay.series, linewidth=3, color=color)
-    ax.text(0.5, 0.92, overlay.ticker, transform=ax.transAxes, ha="center", fontsize=26)
-    ax.text(0.5, 0.84, close_text, transform=ax.transAxes, ha="center", fontsize=40, color=color)
-    ax.text(0.5, 0.78, change_text, transform=ax.transAxes, ha="center", fontsize=26, color=color)
-    ax.axis("off")
-    fig.savefig(out_path, bbox_inches="tight")
+
+    box = {"boxstyle": "round", "facecolor": "black", "alpha": 0.55, "edgecolor": "none"}
+    fig.text(0.5, 0.30, overlay.ticker, ha="center", fontsize=26, color="white", bbox=box)
+    fig.text(0.5, 0.25, close_text, ha="center", fontsize=40, color=color, bbox=box)
+    fig.text(0.5, 0.205, change_text, ha="center", fontsize=26, color=color, bbox=box)
+
+    fig.savefig(out_path, transparent=True)  # 투명 PNG(배경 위 합성)
     plt.close(fig)
     return out_path

@@ -76,9 +76,10 @@ class MediaAssembleEvent(BaseModel):
 
     job_id: int
     chart: ChartData  # 정확 수치·시계열(알파3)
-    title: str  # 배경 타이틀 카드 문구(로컬 렌더)
+    title: str  # 배경 타이틀 카드 문구(로컬 렌더 폴백)
     subtitle: str  # 자막(스크립트 hook/요약)
     narration: str = ""  # 내레이션 텍스트(로컬 TTS가 읽음, 라운드⑩). 비면 무음
+    broll_query: str = ""  # 배경 스톡 검색어(Pexels, 라운드⑫). 비면 title/기본
     duration: float = 6.0
 
 
@@ -89,6 +90,10 @@ class ContentAssembledEvent(BaseModel):
     ok: bool
     mp4_path: str | None = None
     error: str | None = None
+    # broll 자산 출처·라이선스(가드레일: 미디어 자산 출처 계승, 라운드⑫). 폴백(로컬카드) 시 None
+    broll_source_url: str | None = None
+    broll_author: str | None = None
+    broll_license: str | None = None
 
 
 # ── 참고: 기존 계약 재사용 ──

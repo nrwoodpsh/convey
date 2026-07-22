@@ -51,6 +51,11 @@ async def _call_agent_script(job_id: int, topic: str, ticker: str | None) -> dic
         return result
 
 
+# broll 배경 검색어 — Pexels 커버리지상 영문 금융 키워드가 안정적(POC).
+# 섹터→영문 매핑은 후속(라운드⑫ History).
+_BROLL_QUERY = "stock market"
+
+
 def _narration(sections: list[dict[str, Any]]) -> str:
     """스크립트 섹션 → 내레이션 문장(로컬 TTS가 읽음). chart 슬롯({close} 등)은 사실값으로 해소.
 
@@ -109,7 +114,8 @@ async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> Non
         settings.topic_assemble,
         {
             "job_id": job_id, "chart": chart, "title": topic,
-            "subtitle": hook, "narration": narration, "duration": 6.0,
+            "subtitle": hook, "narration": narration,
+            "broll_query": _BROLL_QUERY, "duration": 6.0,
         },
         key=str(job_id),
     )
@@ -127,7 +133,13 @@ async def handle_assembled(event: dict[str, Any], producer: KafkaProducer) -> No
         return
 
     async with SessionLocal() as session:
-        content = Content(job_id=job_id, mp4_path=str(mp4_path))
+        content = Content(
+            job_id=job_id,
+            mp4_path=str(mp4_path),
+            broll_source_url=event.get("broll_source_url"),  # 가드레일: 자산 출처 계승
+            broll_author=event.get("broll_author"),
+            broll_license=event.get("broll_license"),
+        )
         session.add(content)
         await session.commit()
         await session.refresh(content)

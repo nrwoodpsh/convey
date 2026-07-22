@@ -14,7 +14,8 @@ from typing import Any
 from common.kafka import KafkaProducer, consume_forever
 from common.logging import configure_logging
 
-from app.assemble import build_short
+from app.assemble import build_short, build_short_video
+from app.broll import PexelsClient
 from app.config import settings
 from app.render import ChartOverlay, render_chart, render_title_card
 from app.tts import make_engine
@@ -43,12 +44,14 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
     title = str(event.get("title", ""))
     subtitle = str(event.get("subtitle", ""))
     narration = str(event.get("narration", "")) or subtitle
+    broll_query = str(event.get("broll_query", "")) or title
     duration = float(event.get("duration", 6.0))
 
     os.makedirs(settings.media_dir, exist_ok=True)
     base = os.path.join(settings.media_dir, f"job-{job_id}")
     chart_png, bg_png, out_mp4 = f"{base}-chart.png", f"{base}-bg.png", f"{base}.mp4"
 
+    broll_meta: dict[str, str] = {}
     try:
         overlay = ChartOverlay(
             ticker=str(chart["ticker"]),
@@ -56,18 +59,40 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
             change_pct=float(chart["change_pct"]),
             series=[float(x) for x in chart.get("series", [])],
         )
-        await asyncio.to_thread(render_chart, overlay, chart_png)
-        await asyncio.to_thread(render_title_card, title, bg_png)
-        # 로컬 TTS(무료·say) — 없으면 무음. 음성 있으면 영상 길이를 음성에 맞춤.
+        await asyncio.to_thread(render_chart, overlay, chart_png)  # 투명 오버레이
+        # 로컬 TTS(무료) — 없으면 무음. 음성 있으면 영상 길이를 음성에 맞춤.
         audio_path = await asyncio.to_thread(make_engine().synthesize, narration, f"{base}-tts")
         if audio_path:
             audio_dur = _audio_duration(audio_path)
             if audio_dur:
                 duration = max(duration, audio_dur)
-        await asyncio.to_thread(
-            build_short, bg_png, chart_png, out_mp4,
-            duration=duration, audio_path=audio_path, subtitle=subtitle,
+        # broll 배경(Pexels) — video/photo, 실패 시 로컬 카드 폴백
+        broll = await asyncio.to_thread(
+            PexelsClient(settings.pexels_api_key).fetch,
+            broll_query, f"{base}-broll", settings.broll_mode,
         )
+        if broll is not None:
+            broll_meta = {
+                "broll_source_url": broll.source_url,
+                "broll_author": broll.author,
+                "broll_license": broll.license,
+            }
+            if broll.kind == "video":
+                await asyncio.to_thread(
+                    build_short_video, broll.path, chart_png, out_mp4,
+                    duration=duration, audio_path=audio_path, subtitle=subtitle,
+                )
+            else:  # photo → 켄번즈
+                await asyncio.to_thread(
+                    build_short, broll.path, chart_png, out_mp4,
+                    duration=duration, audio_path=audio_path, subtitle=subtitle,
+                )
+        else:  # 폴백: 로컬 타이틀 카드(현행)
+            await asyncio.to_thread(render_title_card, title, bg_png)
+            await asyncio.to_thread(
+                build_short, bg_png, chart_png, out_mp4,
+                duration=duration, audio_path=audio_path, subtitle=subtitle,
+            )
     except Exception as exc:  # noqa: BLE001 — 실패도 회신(잡을 failed로)
         await producer.publish(
             settings.topic_assembled,
@@ -79,10 +104,10 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
 
     await producer.publish(
         settings.topic_assembled,
-        {"job_id": job_id, "ok": True, "mp4_path": out_mp4},
+        {"job_id": job_id, "ok": True, "mp4_path": out_mp4, **broll_meta},
         key=str(job_id),
     )
-    logger.info("합성 완료 job=%s mp4=%s", job_id, out_mp4)
+    logger.info("합성 완료 job=%s mp4=%s broll=%s", job_id, out_mp4, broll_meta.get("broll_source_url", "로컬카드"))
 
 
 async def run() -> None:

@@ -50,7 +50,11 @@ class Content(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     job_id: Mapped[int] = mapped_column(Integer, index=True)
     mp4_path: Mapped[str] = mapped_column(String(500))
+    # broll 배경 자산 출처·라이선스(가드레일: 미디어 자산 출처 계승, 라운드⑫). 폴백 시 NULL
+    broll_source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    broll_author: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    broll_license: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-# TODO(후속): Asset(외부 broll/TTS 메타 — 키 발급 후), ReviewStatus
+# TODO(후속): TTS 자산 메타, ReviewStatus

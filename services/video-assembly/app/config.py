@@ -16,5 +16,9 @@ class Settings(BaseAppSettings):
     # 미디어 바이너리 저장 — POC는 로컬 볼륨(ADR 0006). 후속 MinIO/S3
     media_dir: str = "/data/media"
 
+    # broll 배경(Pexels 무료 스톡, 라운드⑫). mode: video|photo|off. 실패 시 로컬 카드 폴백
+    pexels_api_key: str = ""
+    broll_mode: str = "video"
+
 
 settings = Settings()

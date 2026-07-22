@@ -48,6 +48,44 @@ def build_short(
     return out_mp4
 
 
+def build_short_video(
+    video_path: str,
+    chart_png: str,
+    out_mp4: str,
+    *,
+    duration: float = 6.0,
+    fps: int = 30,
+    audio_path: str | None = None,
+    subtitle: str | None = None,
+) -> str:
+    """영상 배경(스톡 broll) → 쇼츠. 배경 영상 9:16 크롭·반복 + (투명)차트 오버레이 + 자막 + 오디오.
+
+    켄번즈 대신 배경 자체 모션 사용(B-2). chart_png는 투명 1080×1920(배경 노출).
+    """
+    vf = (
+        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[bg];"
+        "[bg][1:v]overlay=(W-w)/2:(H-h)/2[v]"
+    )
+    if subtitle:
+        safe = subtitle.replace("\\", "").replace(":", r"\:").replace("'", "")
+        vf += (
+            f";[v]drawtext=text='{safe}':fontcolor=white:fontsize=42:box=1:"
+            "boxcolor=black@0.5:boxborderw=12:x=(w-text_w)/2:y=h-240[v]"
+        )
+    cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", video_path, "-loop", "1", "-i", chart_png]
+    if audio_path:
+        cmd += ["-i", audio_path]
+    else:
+        cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
+    cmd += [
+        "-filter_complex", vf, "-map", "[v]", "-map", "2:a",
+        "-t", str(duration), "-r", str(fps),
+        "-pix_fmt", "yuv420p", "-c:v", "libx264", "-c:a", "aac", "-shortest", out_mp4,
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)
+    return out_mp4
+
+
 def compose(
     chart_png: str,
     out_mp4: str,
