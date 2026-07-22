@@ -16,8 +16,9 @@ from common.security import H_SIGNATURE, H_TIMESTAMP, H_USER_ID, sign_internal
 
 from app.config import settings
 from app.db import SessionLocal
+from app.domains.content import service
 from app.domains.content.models import Content, GenerationJob, Script
-from app.domains.content.schemas import JobStatus
+from app.domains.content.schemas import GenerateRequest, JobStatus
 
 logger = logging.getLogger("content.consumer")
 
@@ -156,6 +157,21 @@ async def handle_assembled(event: dict[str, Any], producer: KafkaProducer) -> No
     logger.info("쇼츠 ready job=%s content=%s mp4=%s", job_id, content_id, mp4_path)
 
 
+async def handle_issue(event: dict[str, Any], producer: KafkaProducer) -> None:
+    """issue.selected(자동 양산, 알파4) → start_generation으로 자동 잡 생성. 수동 POST와 동일 경로.
+
+    발행은 여전히 사람 승인(불변) — 자동은 ready까지만.
+    """
+    ticker = str(event.get("ticker", ""))
+    if not ticker:
+        return
+    name = str(event.get("name") or ticker)
+    req = GenerateRequest(topic=f"{name} 이슈", ticker=ticker)
+    async with SessionLocal() as session:
+        job_id = await service.start_generation(session, producer, req, owner_id="auto")
+    logger.info("자동 양산 잡 생성 job=%s ticker=%s", job_id, ticker)
+
+
 async def run_consumer(producer: KafkaProducer) -> None:
     """lifespan 백그라운드 — content.generate 소비."""
 
@@ -179,6 +195,20 @@ async def run_assembled_consumer(producer: KafkaProducer) -> None:
     await consume_forever(
         topic=settings.topic_assembled,
         group_id=f"{settings.consumer_group}-assembled",
+        bootstrap=settings.kafka_bootstrap,
+        handler=handler,
+    )
+
+
+async def run_issue_consumer(producer: KafkaProducer) -> None:
+    """lifespan 백그라운드 — issue.selected(자동 양산) 소비 → 자동 잡 생성."""
+
+    async def handler(event: dict[str, Any]) -> None:
+        await handle_issue(event, producer)
+
+    await consume_forever(
+        topic=settings.topic_issue_selected,
+        group_id=f"{settings.consumer_group}-issue",
         bootstrap=settings.kafka_bootstrap,
         handler=handler,
     )

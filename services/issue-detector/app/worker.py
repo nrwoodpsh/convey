@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from common.kafka import consume_forever
+from common.kafka import KafkaProducer, consume_forever
 
 from app.config import settings
 from app.ranking import RollingRanker
@@ -50,3 +50,36 @@ async def run_consumers(ranker: RollingRanker) -> None:
             handler=on_news,
         ),
     )
+
+
+async def run_emitter(ranker: RollingRanker) -> None:
+    """자동 양산(알파4) — 주기적으로 상위 이슈를 issue.selected로 발행. content가 자동 생성.
+
+    score 임계 + 상위 K + 종목 쿨다운으로 무의미·중복 양산을 막는다.
+    """
+    producer = KafkaProducer(settings.kafka_bootstrap)
+    await producer.start()
+    cooldown: dict[str, datetime] = {}
+    logger.info(
+        "issue emitter 시작 interval=%ss top_k=%s thr=%s",
+        settings.emit_interval_seconds, settings.emit_top_k, settings.score_threshold,
+    )
+    try:
+        while True:
+            now = datetime.now(timezone.utc)
+            for r in ranker.top(settings.emit_top_k, settings.window_hours, now):
+                if r.score < settings.score_threshold:
+                    continue
+                last = cooldown.get(r.ticker)
+                if last and (now - last).total_seconds() < settings.cooldown_seconds:
+                    continue  # 스로틀: 쿨다운 내 재발행 억제
+                await producer.publish(
+                    settings.topic_issue_selected,
+                    {"ticker": r.ticker, "name": "", "score": r.score, "as_of": now.isoformat()},
+                    key=r.ticker,
+                )
+                cooldown[r.ticker] = now
+                logger.info("issue.selected 발행 ticker=%s score=%.2f", r.ticker, r.score)
+            await asyncio.sleep(settings.emit_interval_seconds)
+    finally:
+        await producer.stop()

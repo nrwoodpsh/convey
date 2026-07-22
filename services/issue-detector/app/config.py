@@ -15,5 +15,12 @@ class Settings(BaseAppSettings):
     w_volume: float = 0.3
     w_news: float = 0.2
 
+    # 자동 양산(알파4, 라운드⑬) — 상위 이슈를 issue.selected로 발행 → content 자동 생성
+    topic_issue_selected: str = "issue.selected"
+    emit_interval_seconds: float = 600.0  # 발행 주기
+    emit_top_k: int = 3  # 매 주기 상위 K만
+    score_threshold: float = 0.5  # 이 미만은 발행 안 함(무의미 양산 방지)
+    cooldown_seconds: float = 86400.0  # 같은 종목 재발행 억제(하루)
+
 
 settings = Settings()

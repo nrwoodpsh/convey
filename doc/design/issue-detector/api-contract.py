@@ -49,5 +49,17 @@ class RankWeights(BaseModel):
     w_news: float = 0.2
 
 
+# 자동 양산(알파4, 라운드⑬) — 상위 이슈를 생성 트리거로 발행.
+# 조회 상태(GET /issues/today)는 그대로 유지하고, "선별된 이슈"만 이벤트로 추가 발행한다.
+TOPIC_ISSUE_SELECTED = "issue.selected"  # issue-detector 발행 → content 소비(자동 잡 생성)
+
+
+class IssueSelectedEvent(BaseModel):
+    ticker: str
+    name: str = ""  # 종목명(스크립트 topic·검색용)
+    score: float
+    as_of: datetime  # UTC
+
+
 class IssueError(tuple[str, int, str], Enum):
     INVALID_PARAM = ("ISS001", 400, "요청 파라미터가 유효하지 않습니다.")

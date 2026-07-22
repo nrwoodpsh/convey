@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.ranking import RankWeights, RollingRanker
-from app.worker import run_consumers
+from app.worker import run_consumers, run_emitter
 
 configure_logging(settings.log_level)
 gateway_user = make_gateway_dep(settings.gateway_internal_secret)
@@ -44,10 +44,12 @@ class IssuesTodayRes(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     task = asyncio.create_task(run_consumers(ranker))  # market.ticks·research.ingested 백그라운드 소비
+    emit_task = asyncio.create_task(run_emitter(ranker))  # 상위 이슈 → issue.selected(자동 양산)
     try:
         yield
     finally:
         task.cancel()
+        emit_task.cancel()
 
 
 app = FastAPI(title="issue-detector", lifespan=lifespan)
