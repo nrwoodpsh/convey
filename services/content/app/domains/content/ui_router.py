@@ -32,6 +32,7 @@ from app.db import get_session
 from app.domains.content import repository, service
 from app.domains.content.models import Script
 from app.domains.content.schemas import (
+    ApproveScenarioReq,
     ArticleItem,
     ArticleListRes,
     DashboardGenerateReq,
@@ -39,6 +40,7 @@ from app.domains.content.schemas import (
     JobListRes,
     JobRes,
     ScriptCiteView,
+    ScriptEditReq,
     ScriptSectionView,
     ScriptView,
 )
@@ -84,10 +86,8 @@ async def dashboard() -> FileResponse:
 
 @router.get("/ui/articles", response_model=ArticleListRes)
 async def ui_articles(limit: int = 50) -> ArticleListRes:
-    """오늘자 수집 기사(research east-west). 오늘 0건이면 최근 7일로 폴백."""
+    """오늘자 수집 기사(research east-west) — 항상 당일만(㉔, 폴백 없음)."""
     rows = await research_client.fetch_articles(window_days=1, limit=limit)
-    if not rows:
-        rows = await research_client.fetch_articles(window_days=7, limit=limit)
     items = [
         ArticleItem(
             article_id=int(r["article_id"]),
@@ -108,11 +108,11 @@ async def ui_generate(
     session: AsyncSession = Depends(get_session),
     producer: KafkaProducer = Depends(get_producer),
 ) -> dict[str, int]:
-    """기사 선택 → 초안 잡(스크립트만, 승인 대기). auto=False로 시나리오 승인 게이트 진입."""
+    """기사+템플릿 선택 → 초안 잡(스크립트만, 승인 대기). auto=False로 시나리오 승인 게이트 진입."""
     ref = str(payload.article_id) if payload.article_id is not None else None
     req = GenerateRequest(topic=payload.title, ticker=payload.ticker, issue_ref=ref)
     job_id = await service.start_generation(
-        session, producer, req, owner_id="dashboard", auto=False
+        session, producer, req, owner_id="dashboard", auto=False, template=payload.template
     )
     return {"job_id": job_id}
 
@@ -146,14 +146,27 @@ async def ui_job_script(
     return _to_script_view(script)
 
 
+@router.put("/ui/jobs/{job_id}/script", response_model=JobRes)
+async def ui_edit_script(
+    job_id: int,
+    payload: ScriptEditReq,
+    session: AsyncSession = Depends(get_session),
+) -> JobRes:
+    """시나리오 수정 저장(㉔) — 편집한 섹션 텍스트로 갱신. scenario_ready만(아니면 CNT003)."""
+    sections = [{"kind": s.kind, "text": s.text} for s in payload.sections]
+    return await service.update_script(session, job_id, sections)
+
+
 @router.post("/ui/jobs/{job_id}/approve-scenario", response_model=JobRes)
 async def ui_approve_scenario(
     job_id: int,
+    payload: ApproveScenarioReq | None = None,
     session: AsyncSession = Depends(get_session),
     producer: KafkaProducer = Depends(get_producer),
 ) -> JobRes:
-    """시나리오 승인(㉓) → media.assemble 발행 → 합성 시작. scenario_ready만 통과."""
-    return await service.approve_scenario(session, producer, job_id)
+    """시나리오 승인+배경(㉓·㉔) → media.assemble 발행 → 합성 시작. scenario_ready만 통과."""
+    background = payload.background if payload is not None else "real"
+    return await service.approve_scenario(session, producer, job_id, background=background)
 
 
 @router.get("/ui/contents/{content_id}/script", response_model=ScriptView)

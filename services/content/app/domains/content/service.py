@@ -35,11 +35,13 @@ async def start_generation(
     owner_id: str,
     *,
     auto: bool = True,
+    template: str = "analysis",
 ) -> int:
     """생성 잡 시작 — 잡(pending) 커밋 후 content.generate 발행(비동기 consumer 픽업).
 
     auto=True(자동양산): 스크립트 후 합성까지 무정지. auto=False(대시보드 수동, ㉓): 스크립트
     생성 후 scenario_ready에서 정지 → 사람이 승인해야 합성(approve_scenario).
+    template(㉔): 시나리오 구성·톤(breaking|analysis|story) — agent로 전달.
     """
     job = GenerationJob(
         status=JobStatus.PENDING.value, topic=req.topic, ticker=req.ticker, owner_id=owner_id
@@ -49,18 +51,45 @@ async def start_generation(
     await session.refresh(job)
     await producer.publish(
         settings.topic_generate,
-        {"job_id": job.id, "topic": req.topic, "ticker": req.ticker, "auto": auto},
+        {"job_id": job.id, "topic": req.topic, "ticker": req.ticker,
+         "auto": auto, "template": template},
         key=str(job.id),
     )
     return job.id
 
 
-async def approve_scenario(
-    session: AsyncSession, producer: KafkaProducer, job_id: int
+async def update_script(
+    session: AsyncSession, job_id: int, sections: list[dict[str, str]]
 ) -> JobRes:
-    """시나리오 승인(㉓) — scenario_ready만 → 보존한 chart로 media.assemble 발행 → assembling.
+    """시나리오 수정 저장(㉔) — scenario_ready인 잡의 Script 섹션 텍스트를 편집본으로 갱신.
 
-    수동 흐름의 사람 게이트(영상 만들기 전). 자동양산은 이 게이트를 거치지 않는다.
+    kind 순서로 매칭해 text만 교체(차트 data_slots·수치는 보존 — 알파3). 합성 시작 후엔 잠금(CNT003).
+    """
+    job = await session.get(GenerationJob, job_id)
+    if job is None:
+        raise AppError("CNT002", "잡을 찾을 수 없습니다.", status=404)
+    if job.status != JobStatus.SCENARIO_READY.value:
+        raise AppError("CNT003", "수정 가능한 상태가 아닙니다.", status=409)
+    script = await repository.get_script_by_job(session, job_id)
+    if script is None:
+        raise AppError("CNT002", "시나리오를 찾을 수 없습니다.", status=404)
+    # 편집본을 인덱스 순서대로 반영(text만). 길이 초과분은 무시, 부족분은 원본 유지.
+    edited = list(sections)
+    new_sections = []
+    for i, sec in enumerate(script.sections):
+        text = edited[i]["text"] if i < len(edited) else str(sec.get("text", ""))
+        new_sections.append({**sec, "text": text})
+    script.sections = new_sections
+    await session.commit()
+    return _to_res(job)
+
+
+async def approve_scenario(
+    session: AsyncSession, producer: KafkaProducer, job_id: int, *, background: str = "real"
+) -> JobRes:
+    """시나리오 승인(㉓·㉔) — scenario_ready만 → 보존한 chart+편집본으로 media.assemble → assembling.
+
+    수동 흐름의 사람 게이트(영상 만들기 전). background=real(산업)|anim(모션그래픽). 자동양산은 미경유.
     """
     job = await session.get(GenerationJob, job_id)
     if job is None:
@@ -75,6 +104,7 @@ async def approve_scenario(
         job_id=job_id, topic=job.topic, ticker=job.ticker,
         chart=job.chart, sections=sections,
         narration_max_chars=settings.narration_max_chars,
+        background=background,
     )
     job.status = JobStatus.ASSEMBLING.value
     await session.commit()

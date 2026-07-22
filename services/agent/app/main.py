@@ -85,6 +85,7 @@ class ScriptReq(BaseModel):
     job_id: int
     topic: str = Field(min_length=1, max_length=200)
     ticker: str | None = None
+    template: str = "analysis"  # 시나리오 템플릿(㉔): breaking|analysis|story
 
 
 class CitationOut(BaseModel):
@@ -120,7 +121,9 @@ async def agent_script(req: ScriptReq, user: UserContext = Depends(gateway_user)
         raise AppError("AGENT001", "가격 근거가 없어 스크립트를 만들 수 없습니다.", status=422)
     llm = _sync_llm(settings.gateway_internal_secret, settings.llm_inference_url)
     # build_script + 그 안의 동기 LLM 호출을 스레드로 격리(이벤트루프 비블로킹)
-    script = await asyncio.to_thread(build_script, req.topic, ev.price, ev.facts, llm, ev.macros)
+    script = await asyncio.to_thread(
+        build_script, req.topic, ev.price, ev.facts, llm, ev.macros, req.template
+    )
     chart = ChartOut(
         ticker=ev.price["ticker"], close=ev.price["close"],
         change_pct=ev.price["change_pct"], series=ev.series,

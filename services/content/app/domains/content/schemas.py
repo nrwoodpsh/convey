@@ -58,11 +58,29 @@ class ArticleListRes(BaseModel):
 
 
 class DashboardGenerateReq(BaseModel):
-    """기사 선택 → 초안 생성(㉓). 제목=기사 제목, 종목=태깅 종목. 스크립트만·승인 대기."""
+    """기사+템플릿 선택 → 초안 생성(㉓·㉔). 제목=기사 제목, 종목=태깅 종목. 스크립트만·승인 대기."""
 
     title: str = Field(min_length=1, max_length=200)
     ticker: str | None = Field(default=None, max_length=20)
     article_id: int | None = None
+    template: str = "analysis"  # 시나리오 템플릿(㉔): breaking|analysis|story
+
+
+class ScriptEditSection(BaseModel):
+    kind: str
+    text: str
+
+
+class ScriptEditReq(BaseModel):
+    """시나리오 수정 저장(㉔) — 편집한 섹션 텍스트. 차트 수치는 영상에서 사실 고정."""
+
+    sections: list[ScriptEditSection] = Field(default_factory=list)
+
+
+class ApproveScenarioReq(BaseModel):
+    """시나리오 승인 + 배경 선택(㉔) → 합성 시작."""
+
+    background: str = "real"  # real(실사) | anim(애니메이션)
 
 
 class JobListItem(BaseModel):

@@ -17,10 +17,13 @@ _BROLL_MAP: dict[str, str] = {
     "373220": "ev battery manufacturing",    # LG에너지솔루션 — 배터리
 }
 _BROLL_DEFAULT = "galaxy space stars glowing"  # 우주의 불빛(범용 프리미엄)
+_BROLL_ANIM = "abstract motion graphics loop"  # 애니메이션 배경(㉔) — Pexels 모션그래픽·추상
 
 
-def broll_query(ticker: str | None) -> str:
-    """종목 코드 → broll 배경 검색어. 알려진 종목=대표 산업, 미지/없음=우주의 불빛."""
+def broll_query(ticker: str | None, background: str = "real") -> str:
+    """배경 검색어(㉔). background=anim → 모션그래픽·추상. real → 종목 산업(미지=우주의 불빛)."""
+    if background == "anim":
+        return _BROLL_ANIM
     return _BROLL_MAP.get(ticker or "", _BROLL_DEFAULT)
 
 
@@ -66,8 +69,9 @@ def build_assemble_event(
     chart: dict[str, Any],
     sections: list[dict[str, Any]],
     narration_max_chars: int,
+    background: str = "real",
 ) -> dict[str, Any]:
-    """media.assemble 이벤트 구성 — 자동/승인 경로 공용. hook=자막, narration=음성."""
+    """media.assemble 이벤트 구성 — 자동/승인 경로 공용. hook=자막, narration=음성, 배경=real|anim."""
     hook = next((s["text"] for s in sections if s.get("kind") == "hook"), topic)
     return {
         "job_id": job_id,
@@ -75,6 +79,6 @@ def build_assemble_event(
         "title": topic,
         "subtitle": hook,
         "narration": build_narration(sections, narration_max_chars),
-        "broll_query": broll_query(ticker),
+        "broll_query": broll_query(ticker, background),
         "duration": 6.0,
     }

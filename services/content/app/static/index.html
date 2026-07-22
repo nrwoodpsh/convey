@@ -8,89 +8,70 @@
   :root{
     --bg:#0c0c0e; --bg2:#141416; --panel:#151518; --panel2:#1b1b1f;
     --red:#e11d34; --red-d:#b3162a; --gold:#e9b44c; --gold-d:#c8963a;
-    --ink:#ece7de; --mut:#8f8a82; --line:#2a2a30;
-    --lime:#4ade80;
+    --ink:#ece7de; --mut:#8f8a82; --line:#2a2a30; --lime:#4ade80;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
-  body{
-    color:var(--ink);
-    font-family:-apple-system,"Apple SD Gothic Neo","맑은 고딕","Malgun Gothic",
-      "Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-    background:
-      radial-gradient(900px 500px at 85% -10%, #2a0a10 0%, transparent 55%),
-      radial-gradient(800px 500px at -10% 110%, #1c1405 0%, transparent 50%),
-      var(--bg);
-    background-attachment:fixed;
-  }
+  body{color:var(--ink);
+    font-family:-apple-system,"Apple SD Gothic Neo","맑은 고딕","Malgun Gothic","Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(900px 500px at 85% -10%,#2a0a10 0%,transparent 55%),
+      radial-gradient(800px 500px at -10% 110%,#1c1405 0%,transparent 50%),var(--bg);
+    background-attachment:fixed}
   .wrap{max-width:1120px;margin:0 auto;padding:24px 22px 80px}
+  header.top{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+  header.top h1{font-size:24px;letter-spacing:5px;margin:0;font-weight:800}
+  header.top h1 .c{color:var(--red)} header.top h1 .dot{color:var(--gold)}
+  header.top .tag{font-size:11px;letter-spacing:2px;color:var(--gold);border:1px solid var(--gold-d);padding:2px 9px;border-radius:3px}
 
-  header.top{display:flex;align-items:center;gap:14px;margin-bottom:4px;flex-wrap:wrap}
-  header.top h1{font-size:24px;letter-spacing:5px;margin:0;font-weight:800;color:var(--ink)}
-  header.top h1 .c{color:var(--red)}
-  header.top h1 .dot{color:var(--gold)}
-  header.top .tag{font-size:11px;letter-spacing:2px;color:var(--gold);border:1px solid var(--gold-d);
-    padding:2px 9px;border-radius:3px}
-  .lead{color:var(--mut);font-size:13px;margin:6px 0 22px;letter-spacing:.3px}
+  /* 상단 탭 */
+  .maintabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:22px}
+  .maintab{cursor:pointer;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:1px;
+    color:var(--mut);background:none;border:none;padding:12px 22px;position:relative;transition:.14s}
+  .maintab:hover{color:var(--ink)}
+  .maintab.on{color:var(--ink)}
+  .maintab.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;
+    background:linear-gradient(90deg,var(--red),var(--gold));border-radius:3px 3px 0 0}
 
-  .panel{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;
-    padding:18px 20px;margin-bottom:20px}
-  /* 상단 레드 라인 + 금색 세선(테두리 강조) */
+  .panel{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:20px}
   .panel::before{content:"";position:absolute;left:18px;right:18px;top:0;height:2px;
     background:linear-gradient(90deg,var(--red),var(--gold));border-radius:0 0 2px 2px}
-  .panel > h2{margin:6px 0 14px;font-size:12px;letter-spacing:2px;color:var(--gold);
-    text-transform:uppercase;display:flex;align-items:center;gap:8px}
+  .panel > h2{margin:6px 0 14px;font-size:12px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;
+    display:flex;align-items:center;gap:8px}
   .panel > h2::before{content:"◆";color:var(--red);font-size:10px}
-  .panel.hero{border-color:#3a2a12;box-shadow:0 0 30px #0000005c}
 
-  /* 미리보기(상단) */
-  .preview{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
-  .vidbox{position:relative;flex:0 0 auto;padding:6px}
-  .vidbox::before,.vidbox::after{content:"";position:absolute;width:22px;height:22px}
-  .vidbox::before{top:0;left:0;border-top:3px solid var(--gold);border-left:3px solid var(--gold);border-radius:6px 0 0 0}
-  .vidbox::after{bottom:0;right:0;border-bottom:3px solid var(--red);border-right:3px solid var(--red);border-radius:0 0 6px 0}
-  .vidbox video{width:250px;max-width:66vw;aspect-ratio:9/16;background:#000;display:block;border-radius:6px;
-    box-shadow:0 10px 34px #000000aa, 0 0 0 1px #000}
-  .vidempty{width:250px;max-width:66vw;aspect-ratio:9/16;border-radius:6px;background:var(--bg2);
-    border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--mut);
-    font-size:12px;text-align:center;padding:20px}
-  .pmeta{flex:1;min-width:260px;color:var(--mut);font-size:13px;line-height:1.85}
-  .pmeta b{color:var(--ink)}
-  .pmeta .pttl{color:var(--ink);font-size:18px;font-weight:800;margin-bottom:4px}
-  .pmeta .pttl .dot{color:var(--gold)}
-  .pmeta .metaline{font-size:12px;color:var(--mut);margin-bottom:12px}
-  .pmeta .metaline .stk{color:var(--gold)}
-
-  /* 시나리오 */
-  .scene{margin-top:4px;border-top:1px solid var(--line);padding-top:12px}
-  .scene h3{font-size:11px;letter-spacing:1.5px;color:var(--gold);text-transform:uppercase;margin:0 0 10px}
-  .seg{display:flex;gap:10px;margin-bottom:10px}
-  .seg .k{flex:0 0 auto;font-size:10px;font-weight:800;color:var(--red);border:1px solid var(--red);
-    border-radius:999px;padding:1px 9px;height:fit-content;letter-spacing:.5px}
-  .seg .tx{flex:1;color:var(--ink);font-size:13px;line-height:1.55}
-  .cites{margin-top:10px;border-top:1px dashed var(--line);padding-top:9px}
-  .cites .ct{font-size:11px;color:var(--mut);margin-bottom:4px;overflow-wrap:anywhere}
-  .cites a{color:var(--gold);text-decoration:none}
-  .cites a:hover{text-decoration:underline}
-  .loading{color:var(--mut);font-size:12px}
-
-  /* 승인 바 */
-  .approvebar{display:flex;align-items:center;gap:14px;margin-top:14px;padding-top:12px;
-    border-top:1px solid var(--line);flex-wrap:wrap}
-  .approvebar .hint{color:var(--gold);font-size:12px;letter-spacing:.3px}
+  /* 스텝 진행바 */
+  .steps{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+  .step{flex:1;min-width:90px;font-size:11px;letter-spacing:.5px;color:var(--mut);background:var(--panel2);
+    border:1px solid var(--line);border-radius:7px;padding:8px 10px;text-align:center;transition:.14s}
+  .step .no{display:inline-block;width:18px;height:18px;line-height:18px;border-radius:50%;background:var(--line);
+    color:var(--ink);font-weight:800;margin-right:5px;font-size:10px}
+  .step.on{color:#fff;border-color:var(--red);background:#241014}
+  .step.on .no{background:var(--red)}
+  .step.done{color:var(--gold)} .step.done .no{background:var(--gold);color:#241a05}
 
   /* 버튼 */
-  button.act{cursor:pointer;font-family:inherit;font-weight:800;letter-spacing:1px;font-size:14px;
-    color:#fff;background:var(--red);border:none;padding:11px 22px;border-radius:7px;
-    box-shadow:0 4px 14px #e11d3444;transition:transform .1s,box-shadow .15s,background .15s}
-  button.act:hover{background:var(--red-d);box-shadow:0 6px 18px #e11d3455;transform:translateY(-1px)}
+  button.act{cursor:pointer;font-family:inherit;font-weight:800;letter-spacing:1px;font-size:14px;color:#fff;
+    background:var(--red);border:none;padding:11px 22px;border-radius:7px;box-shadow:0 4px 14px #e11d3444;
+    transition:transform .1s,box-shadow .15s,background .15s}
+  button.act:hover{background:var(--red-d);transform:translateY(-1px)}
   button.act:disabled{opacity:.45;cursor:wait;box-shadow:none;transform:none}
-  button.gold{background:linear-gradient(90deg,var(--gold),var(--gold-d));color:#241a05;
-    box-shadow:0 4px 14px #e9b44c33}
-  button.gold:hover{filter:brightness(1.06);box-shadow:0 6px 18px #e9b44c44}
+  button.gold{background:linear-gradient(90deg,var(--gold),var(--gold-d));color:#241a05;box-shadow:0 4px 14px #e9b44c33}
+  button.gold:hover{filter:brightness(1.06)}
+  button.ghost{background:transparent;color:var(--mut);border:1px solid var(--line)}
+  button.ghost:hover{color:var(--ink);border-color:#3a3a42}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+
+  /* 선택칩(템플릿·배경) */
+  .chips{display:flex;gap:10px;flex-wrap:wrap}
+  .chip{cursor:pointer;font-family:inherit;font-size:13px;color:var(--ink);background:var(--panel2);
+    border:1px solid var(--line);border-radius:9px;padding:12px 16px;transition:.14s;min-width:150px}
+  .chip:hover{border-color:#3a3a42}
+  .chip.on{border-color:var(--gold);background:#241a05;box-shadow:0 0 0 2px #e9b44c33}
+  .chip .t{font-weight:800;color:var(--gold);letter-spacing:.5px}
+  .chip .d{font-size:11px;color:var(--mut);margin-top:4px;line-height:1.4}
 
   /* 기사 목록 */
-  .arts{display:flex;flex-direction:column;gap:10px;max-height:360px;overflow-y:auto}
+  .arts{display:flex;flex-direction:column;gap:10px;max-height:420px;overflow-y:auto}
   .art{display:flex;align-items:center;gap:14px;background:var(--panel2);border:1px solid var(--line);
     border-left:3px solid var(--gold-d);border-radius:8px;padding:12px 14px;transition:.12s}
   .art:hover{border-color:#3a3a42;background:#202026}
@@ -99,42 +80,54 @@
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .art .sub{font-size:11px;color:var(--mut);margin-top:4px}
   .art .sub .stk{color:var(--gold)}
-  .art .sub a{color:var(--mut);text-decoration:none}
-  .art .sub a:hover{color:var(--gold)}
 
-  /* 필터 탭 + 카드 */
-  .tabs{display:flex;gap:9px;margin-bottom:16px;flex-wrap:wrap}
-  .tab{cursor:pointer;font-family:inherit;font-size:12px;letter-spacing:1px;color:var(--mut);
-    background:var(--panel2);border:1px solid var(--line);padding:7px 16px;border-radius:999px;transition:.14s}
-  .tab:hover{color:var(--ink);border-color:#3a3a42}
-  .tab.on{color:#fff;background:var(--red);border-color:var(--red);font-weight:800}
-  .tab .n{opacity:.7;margin-left:5px}
+  /* 시나리오 편집 */
+  .seg{display:flex;gap:10px;margin-bottom:10px;align-items:flex-start}
+  .seg .k{flex:0 0 auto;font-size:10px;font-weight:800;color:var(--red);border:1px solid var(--red);
+    border-radius:999px;padding:2px 9px;letter-spacing:.5px;margin-top:6px}
+  .seg textarea{flex:1;background:#0b0b0d;border:1px solid var(--line);color:var(--ink);font-family:inherit;
+    font-size:13px;line-height:1.5;padding:8px 10px;border-radius:6px;resize:vertical;min-height:44px;outline:none}
+  .seg textarea:focus{border-color:var(--gold)}
+
+  /* 미리보기 */
+  .preview{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+  .vidbox{position:relative;flex:0 0 auto;padding:6px}
+  .vidbox::before,.vidbox::after{content:"";position:absolute;width:22px;height:22px}
+  .vidbox::before{top:0;left:0;border-top:3px solid var(--gold);border-left:3px solid var(--gold);border-radius:6px 0 0 0}
+  .vidbox::after{bottom:0;right:0;border-bottom:3px solid var(--red);border-right:3px solid var(--red);border-radius:0 0 6px 0}
+  .vidbox video{width:250px;max-width:66vw;aspect-ratio:9/16;background:#000;display:block;border-radius:6px;box-shadow:0 10px 34px #000a}
+  .pmeta{flex:1;min-width:240px;color:var(--mut);font-size:13px;line-height:1.8}
+  .pmeta .pttl{color:var(--ink);font-size:18px;font-weight:800;margin-bottom:4px}
+  .pmeta .pttl .dot{color:var(--gold)}
+  .pmeta .stk{color:var(--gold)}
+  .pmeta .seg2{display:flex;gap:8px;margin-bottom:8px} .pmeta .seg2 .k{flex:0 0 auto;font-size:10px;font-weight:800;color:var(--red);border:1px solid var(--red);border-radius:999px;padding:1px 8px;height:fit-content}
+  .pmeta .seg2 .tx{color:var(--ink);font-size:13px}
+
+  /* 생성쇼츠 탭 */
+  .filt{display:flex;gap:9px;margin-bottom:16px;flex-wrap:wrap}
+  .filt .f{cursor:pointer;font-family:inherit;font-size:12px;letter-spacing:1px;color:var(--mut);background:var(--panel2);
+    border:1px solid var(--line);padding:7px 16px;border-radius:999px;transition:.14s}
+  .filt .f.on{color:#fff;background:var(--red);border-color:var(--red);font-weight:800}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
-  .card{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
-    padding:15px 16px 13px;transition:transform .12s,box-shadow .15s,border-color .15s;cursor:pointer}
+  .card{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:15px 16px 13px;cursor:pointer;transition:.14s}
   .card::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:10px 0 0 10px;background:var(--mut)}
-  .card.done::after{background:linear-gradient(var(--gold),var(--red))}
-  .card.run::after{background:var(--gold)}
-  .card.fail::after{background:#5a2a30}
-  .card:hover{transform:translateY(-3px);box-shadow:0 12px 26px #000000aa;border-color:#3a3a42}
+  .card.done::after{background:linear-gradient(var(--gold),var(--red))} .card.run::after{background:var(--gold)} .card.fail::after{background:#5a2a30}
+  .card:hover{transform:translateY(-3px);box-shadow:0 12px 26px #000a;border-color:#3a3a42}
   .card.sel{border-color:var(--gold);box-shadow:0 0 0 2px #e9b44c44}
   .card .jid{font-size:10px;color:var(--mut);letter-spacing:1px}
   .card .ttl{font-size:15px;color:var(--ink);font-weight:700;margin:6px 0 9px;line-height:1.35;min-height:2.7em;
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .card .stock{font-size:12px;color:var(--gold);font-weight:700;margin-bottom:12px}
-  .card .stock.none{color:var(--mut);font-weight:400}
+  .card .stock{font-size:12px;color:var(--gold);font-weight:700;margin-bottom:12px} .card .stock.none{color:var(--mut);font-weight:400}
   .card .foot{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .card .time{font-size:10px;color:var(--mut)}
-  .badge{display:inline-block;font-size:10px;letter-spacing:.5px;padding:3px 9px;border-radius:999px;
-    border:1px solid currentColor;font-weight:800}
-  .badge.done{color:var(--lime)} .badge.run{color:var(--gold);animation:pulse 1.2s infinite}
-  .badge.fail{color:#e06a78} .badge.wait{color:var(--gold)}
+  .badge{display:inline-block;font-size:10px;padding:3px 9px;border-radius:999px;border:1px solid currentColor;font-weight:800}
+  .badge.done{color:var(--lime)} .badge.run{color:var(--gold);animation:pulse 1.2s infinite} .badge.fail{color:#e06a78} .badge.wait{color:var(--gold)}
   @keyframes pulse{50%{opacity:.4}}
-
-  .empty{color:var(--mut);font-size:13px;padding:14px 0}
+  .empty,.loading{color:var(--mut);font-size:13px;padding:12px 0}
+  .hidden{display:none!important}
   #toast{position:fixed;right:20px;bottom:20px;z-index:20;display:flex;flex-direction:column;gap:8px}
   .t{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--gold);color:var(--ink);
-     padding:11px 16px;font-size:13px;border-radius:8px;box-shadow:0 10px 28px #000000aa;animation:tin .2s}
+    padding:11px 16px;font-size:13px;border-radius:8px;box-shadow:0 10px 28px #000a;animation:tin .2s}
   .t.err{border-left-color:var(--red)}
   @keyframes tin{from{transform:translateX(20px);opacity:0}}
 </style>
@@ -145,197 +138,257 @@
     <h1><span class="c">C</span>ONVEY<span class="dot">.</span></h1>
     <span class="tag">운영 콘솔</span>
   </header>
-  <p class="lead">주식 리서치 → 유튜브 쇼츠 · 기사 선택 → 시나리오 승인 → 생성</p>
 
-  <!-- 미리보기 (상단) -->
-  <section class="panel hero">
-    <h2>미리보기</h2>
-    <div class="preview">
-      <div class="vidbox" id="vidbox">
-        <div class="vidempty" id="vidempty">완료된 쇼츠를 선택하면<br>여기서 재생됩니다.</div>
-        <video id="player" controls preload="metadata" style="display:none"></video>
+  <div class="maintabs">
+    <button class="maintab on" data-tab="make">오늘자 기사</button>
+    <button class="maintab" data-tab="shorts">생성쇼츠</button>
+  </div>
+
+  <!-- ═══ 탭1: 오늘자 기사 (마법사) ═══ -->
+  <div id="tab-make">
+    <div class="steps" id="steps">
+      <div class="step on" data-s="1"><span class="no">1</span>기사 선택</div>
+      <div class="step" data-s="2"><span class="no">2</span>템플릿</div>
+      <div class="step" data-s="3"><span class="no">3</span>시나리오 수정</div>
+      <div class="step" data-s="4"><span class="no">4</span>배경·생성</div>
+      <div class="step" data-s="5"><span class="no">5</span>미리보기</div>
+    </div>
+
+    <!-- 1) 기사 -->
+    <section class="panel" id="s1">
+      <h2>오늘자 수집 기사</h2>
+      <div class="arts" id="arts"><div class="loading">불러오는 중…</div></div>
+    </section>
+
+    <!-- 2) 템플릿 -->
+    <section class="panel hidden" id="s2">
+      <h2>시나리오 템플릿 선택</h2>
+      <div style="color:var(--mut);font-size:12px;margin-bottom:12px" id="s2sel"></div>
+      <div class="chips" id="tpl">
+        <div class="chip" data-v="breaking"><div class="t">속보형</div><div class="d">훅 → 종가·등락 → 한 줄. 짧고 빠르게.</div></div>
+        <div class="chip on" data-v="analysis"><div class="t">분석형</div><div class="d">훅 → 수치 → 사실 2~3 → 거시맥락.</div></div>
+        <div class="chip" data-v="story"><div class="t">스토리형</div><div class="d">도입 → 사건 전개 → 전망 마무리.</div></div>
       </div>
-      <div class="pmeta" id="pmeta"><div class="empty">아래에서 기사를 골라 제작을 시작하세요.</div></div>
-    </div>
-  </section>
+      <div class="row"><button class="ghost" data-back="1">← 기사</button><button class="act" id="genBtn">시나리오 생성 ▶</button></div>
+    </section>
 
-  <!-- 새 제작: 기사 -> 시나리오 -> 승인 -->
-  <section class="panel">
-    <h2>새 제작 — 오늘자 수집 기사</h2>
-    <div class="arts" id="arts"><div class="loading">기사 불러오는 중…</div></div>
-  </section>
+    <!-- 3) 시나리오 수정 -->
+    <section class="panel hidden" id="s3">
+      <h2>시나리오 수정</h2>
+      <div id="editArea"><div class="loading">시나리오 생성 중…</div></div>
+    </section>
 
-  <!-- 내 쇼츠 -->
-  <section class="panel">
-    <h2>내 쇼츠</h2>
-    <div class="tabs" id="tabs">
-      <button class="tab on" data-f="done">완료 <span class="n" id="n-done">0</span></button>
-      <button class="tab" data-f="fail">실패 <span class="n" id="n-fail">0</span></button>
-      <button class="tab" data-f="all">전체 <span class="n" id="n-all">0</span></button>
-    </div>
-    <div class="grid" id="grid"><div class="empty">불러오는 중…</div></div>
-  </section>
+    <!-- 4) 배경·생성 -->
+    <section class="panel hidden" id="s4">
+      <h2>배경 선택 · 쇼츠 생성</h2>
+      <div class="chips" id="bg">
+        <div class="chip on" data-v="real"><div class="t">실사</div><div class="d">종목 대표 산업 실사 영상.</div></div>
+        <div class="chip" data-v="anim"><div class="t">애니메이션</div><div class="d">모션그래픽·추상 루프.</div></div>
+      </div>
+      <div class="row"><button class="ghost" data-back="3">← 수정</button><button class="act gold" id="approveBtn">승인 → 쇼츠 생성 ▶</button></div>
+    </section>
+
+    <!-- 5) 미리보기 -->
+    <section class="panel hidden" id="s5">
+      <h2>미리보기</h2>
+      <div class="preview">
+        <div class="vidbox"><video id="wplayer" controls preload="metadata"></video></div>
+        <div class="pmeta" id="wmeta"></div>
+      </div>
+      <div class="row"><button class="act" id="restartBtn">새 제작 시작 ↺</button></div>
+    </section>
+  </div>
+
+  <!-- ═══ 탭2: 생성쇼츠 ═══ -->
+  <div id="tab-shorts" class="hidden">
+    <section class="panel hidden" id="pvPanel">
+      <h2>미리보기</h2>
+      <div class="preview">
+        <div class="vidbox"><video id="player" controls preload="metadata"></video></div>
+        <div class="pmeta" id="pmeta"></div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>내 쇼츠</h2>
+      <div class="filt" id="filt">
+        <button class="f on" data-f="done">완료 <span id="n-done">0</span></button>
+        <button class="f" data-f="fail">실패 <span id="n-fail">0</span></button>
+        <button class="f" data-f="all">전체 <span id="n-all">0</span></button>
+      </div>
+      <div class="grid" id="grid"><div class="empty">불러오는 중…</div></div>
+    </section>
+  </div>
 </div>
 <div id="toast"></div>
 
 <script>
 "use strict";
-const RUNNING = new Set(["pending","scripting","assembling","media"]);
-const DONE = new Set(["ready","approved"]);
-const KIND_LABEL = {hook:"훅", chart:"차트", fact:"사실", macro:"거시", closing:"마무리"};
-const $ = s => document.querySelector(s);
-let items = [];        // 잡 목록
-let filter = "done";
-let selected = null;   // 미리보기 대상 content_id
-let draftJob = null;   // 제작 중(초안) job_id — 시나리오 승인 대기 추적
-let pollTimer = null;
+const RUNNING=new Set(["pending","scripting","assembling","media"]);
+const DONE=new Set(["ready","approved"]);
+const KIND_LABEL={hook:"훅",chart:"차트",fact:"사실",macro:"거시",closing:"마무리"};
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+let items=[], filter="done", selected=null, pollTimer=null;
+// 마법사 상태
+const wz={article:null, template:"analysis", background:"real", job:null, step:1};
 
-function toast(m, err){ const e=document.createElement("div"); e.className="t"+(err?" err":""); e.textContent=m; $("#toast").appendChild(e); setTimeout(()=>e.remove(),3400); }
-function cls(s){ return s==="failed"?"fail":(DONE.has(s)?"done":"run"); }
-function fmt(iso){ try{ return iso.replace("T"," ").slice(5,16); }catch{ return iso||""; } }
-function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
-function matches(it){ if(filter==="all")return true; if(filter==="fail")return it.status==="failed"; return DONE.has(it.status); }
+function toast(m,err){const e=document.createElement("div");e.className="t"+(err?" err":"");e.textContent=m;$("#toast").appendChild(e);setTimeout(()=>e.remove(),3400);}
+function cls(s){return s==="failed"?"fail":(DONE.has(s)?"done":"run");}
+function fmt(iso){try{return String(iso).replace("T"," ").slice(5,16);}catch{return iso||"";}}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function host(u){try{return new URL(u).hostname;}catch{return"출처";}}
 
-// ── 기사 목록 ──
+// ── 탭 전환 ──
+$$(".maintab").forEach(b=>b.onclick=()=>{
+  $$(".maintab").forEach(t=>t.classList.toggle("on",t===b));
+  const t=b.dataset.tab;
+  $("#tab-make").classList.toggle("hidden",t!=="make");
+  $("#tab-shorts").classList.toggle("hidden",t!=="shorts");
+  if(t==="shorts") loadJobs();
+});
+
+// ── 마법사 스텝 표시 ──
+function goStep(n){
+  wz.step=n;
+  [1,2,3,4,5].forEach(i=>{
+    $("#s"+i).classList.toggle("hidden",i!==n);
+    const st=$(`.step[data-s="${i}"]`);
+    st.classList.toggle("on",i===n); st.classList.toggle("done",i<n);
+  });
+}
+$$(".step").forEach(st=>st.onclick=()=>{ const n=+st.dataset.s; if(n<wz.step) goStep(n); });
+$$("[data-back]").forEach(b=>b.onclick=()=>goStep(+b.dataset.back));
+
+// ── 1) 기사 ──
 async function loadArticles(){
   let data=[];
-  try{ const r=await fetch("/ui/articles?limit=40"); if(r.ok) data=(await r.json()).items||[]; }
-  catch(e){}
+  try{const r=await fetch("/ui/articles?limit=40"); if(r.ok) data=(await r.json()).items||[];}catch(e){}
   const box=$("#arts");
-  if(!data.length){ box.innerHTML=`<div class="empty">오늘자 수집 기사가 없습니다. (수집 파이프라인 확인)</div>`; return; }
+  if(!data.length){box.innerHTML=`<div class="empty">오늘 수집된 기사가 없습니다.</div>`;return;}
   box.innerHTML=data.map(a=>{
-    const stk = a.name ? `<span class="stk">◈ ${esc(a.name)}</span> · ` : "";
-    const host = (()=>{ try{ return new URL(a.source_url).hostname; }catch{ return "출처"; } })();
-    return `<div class="art">
-      <div class="info">
-        <div class="t">${esc(a.title)}</div>
-        <div class="sub">${stk}${esc(fmt(a.published_at))} · <a href="${esc(a.source_url)}" target="_blank" rel="noopener">${esc(host)}</a></div>
-      </div>
-      <button class="act" data-title="${esc(a.title)}" data-ticker="${esc(a.ticker||"")}" data-aid="${a.article_id}">진행 ▶</button>
-    </div>`;
+    const stk=a.name?`<span class="stk">◈ ${esc(a.name)}</span> · `:"";
+    return `<div class="art"><div class="info"><div class="t">${esc(a.title)}</div>
+      <div class="sub">${stk}${esc(fmt(a.published_at))} · <a href="${esc(a.source_url)}" target="_blank" rel="noopener" style="color:var(--mut)">${esc(host(a.source_url))}</a></div></div>
+      <button class="act" data-title="${esc(a.title)}" data-ticker="${esc(a.ticker||"")}" data-aid="${a.article_id}">진행 ▶</button></div>`;
   }).join("");
-  box.querySelectorAll("button.act").forEach(b=>{
-    b.onclick=()=>startDraft(b.dataset.title, b.dataset.ticker, +b.dataset.aid, b);
+  box.querySelectorAll("button.act").forEach(b=>b.onclick=()=>{
+    wz.article={title:b.dataset.title, ticker:b.dataset.ticker||null, article_id:+b.dataset.aid};
+    $("#s2sel").innerHTML=`선택: <b style="color:var(--ink)">${esc(wz.article.title)}</b>`;
+    goStep(2);
   });
 }
 
-// ── 초안 생성(스크립트만) → 시나리오 승인 대기 ──
-async function startDraft(title, ticker, aid, btn){
-  btn.disabled=true; btn.textContent="생성 중…";
+// ── 2) 템플릿 선택 → 생성 ──
+$("#tpl").onclick=e=>{const c=e.target.closest(".chip");if(!c)return;
+  wz.template=c.dataset.v; $$("#tpl .chip").forEach(x=>x.classList.toggle("on",x===c));};
+$("#genBtn").onclick=async()=>{
+  const btn=$("#genBtn"); btn.disabled=true; btn.textContent="생성 중…";
   try{
     const r=await fetch("/ui/generate",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({title, ticker: ticker||null, article_id: aid})});
+      body:JSON.stringify({title:wz.article.title,ticker:wz.article.ticker,article_id:wz.article.article_id,template:wz.template})});
     if(!r.ok) throw new Error(r.status);
-    const j=await r.json();
-    draftJob=j.job_id;
-    toast(`시나리오 생성 시작 · job #${j.job_id}`);
-    showScenarioPlaceholder(title, ticker);
+    wz.job=(await r.json()).job_id;
+    toast(`시나리오 생성 시작 · job #${wz.job}`);
+    goStep(3); $("#editArea").innerHTML=`<div class="loading">시나리오 생성 중… (${wz.template})</div>`;
     ensurePolling();
-  }catch(e){ toast("생성 요청 실패: "+e.message,true); }
-  finally{ btn.disabled=false; btn.textContent="진행 ▶"; }
+  }catch(e){toast("생성 실패: "+e.message,true);}
+  finally{btn.disabled=false; btn.textContent="시나리오 생성 ▶";}
+};
+
+// ── 3) 시나리오 수정 ──
+let editSections=[];
+async function showEditor(){
+  let s={sections:[]};
+  try{const r=await fetch(`/ui/jobs/${wz.job}/script`); if(r.ok) s=await r.json();}catch(e){}
+  editSections=s.sections||[];
+  if(!editSections.length){$("#editArea").innerHTML=`<div class="loading">시나리오가 비었습니다.</div>`;return;}
+  $("#editArea").innerHTML=editSections.map((x,i)=>
+    `<div class="seg"><span class="k">${esc(KIND_LABEL[x.kind]||x.kind)}</span>
+     <textarea data-i="${i}" rows="2">${esc(x.text)}</textarea></div>`).join("")+
+    `<div class="row"><button class="ghost" data-back="2">← 템플릿</button>
+     <button class="act" id="saveBtn">저장</button>
+     <button class="act gold" id="toBgBtn">배경 선택 →</button></div>`;
+  $$("#editArea [data-back]").forEach(b=>b.onclick=()=>goStep(+b.dataset.back));
+  $("#saveBtn").onclick=()=>saveScript(false);
+  $("#toBgBtn").onclick=()=>saveScript(true);
+}
+async function saveScript(advance){
+  const secs=[...$$("#editArea textarea")].map(t=>({kind:editSections[+t.dataset.i].kind, text:t.value}));
+  try{
+    const r=await fetch(`/ui/jobs/${wz.job}/script`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({sections:secs})});
+    if(!r.ok) throw new Error(r.status);
+    toast("시나리오 저장됨");
+    if(advance) goStep(4);
+  }catch(e){toast("저장 실패: "+e.message,true);}
 }
 
-function showScenarioPlaceholder(title, ticker){
-  $("#vidempty").style.display="flex"; $("#player").style.display="none";
-  $("#pmeta").innerHTML=`<div class="pttl">${esc(title)}<span class="dot">.</span></div>`+
-    `<div class="metaline">시나리오 생성 중… (승인 후 영상이 만들어집니다)</div>`+
-    `<div class="scene"><h3>시나리오</h3><div class="loading">작성 중…</div></div>`;
-}
+// ── 4) 배경 선택 → 승인/생성 ──
+$("#bg").onclick=e=>{const c=e.target.closest(".chip");if(!c)return;
+  wz.background=c.dataset.v; $$("#bg .chip").forEach(x=>x.classList.toggle("on",x===c));};
+$("#approveBtn").onclick=async()=>{
+  const btn=$("#approveBtn"); btn.disabled=true; btn.textContent="생성 중…";
+  try{
+    const r=await fetch(`/ui/jobs/${wz.job}/approve-scenario`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({background:wz.background})});
+    if(!r.ok) throw new Error(r.status);
+    toast(`쇼츠 생성 시작 (job #${wz.job}, ${wz.background==="anim"?"애니":"실사"})`);
+    goStep(5); $("#wmeta").innerHTML=`<div class="loading">합성 중… 잠시만요.</div>`;
+    ensurePolling();
+  }catch(e){toast("승인 실패: "+e.message,true); btn.disabled=false; btn.textContent="승인 → 쇼츠 생성 ▶";}
+};
+$("#restartBtn").onclick=()=>{wz.article=null;wz.job=null;$("#wplayer").removeAttribute("src");goStep(1);loadArticles();};
 
-// 초안 잡이 scenario_ready 되면 시나리오+승인 노출
-async function refreshDraft(){
-  if(draftJob==null) return;
-  const job = items.find(i=>i.job_id===draftJob);
+// 마법사 잡 상태 반영(폴링)
+function refreshWizard(){
+  if(wz.job==null) return;
+  const job=items.find(i=>i.job_id===wz.job);
   if(!job) return;
-  if(job.status==="failed"){ $("#pmeta .scene").innerHTML=`<h3>시나리오</h3><div class="loading">생성 실패: ${esc(job.error||"")}</div>`; draftJob=null; return; }
-  if(job.status==="scenario_ready"){
-    const s = await fetchScript(`/ui/jobs/${draftJob}/script`);
-    renderScenario(job, s, true);
-  }else if(DONE.has(job.status) && job.content_id!=null){
-    // 승인 후 완성됨 → 자동 재생
-    play(job.content_id, job.topic, job.name); draftJob=null;
+  if(job.status==="failed"){ if(wz.step===3)$("#editArea").innerHTML=`<div class="loading">생성 실패: ${esc(job.error||"")}</div>`; if(wz.step===5)$("#wmeta").innerHTML=`<div class="loading">합성 실패: ${esc(job.error||"")}</div>`; return; }
+  if(wz.step===3 && job.status==="scenario_ready" && !editSections.length) showEditor();
+  if(wz.step===5 && DONE.has(job.status) && job.content_id!=null && !$("#wplayer").src){
+    playInto("#wplayer","#wmeta", job.content_id, job.topic, job.name);
   }
 }
 
-async function fetchScript(url){
-  try{ const r=await fetch(url); if(r.ok) return await r.json(); }catch(e){}
-  return {sections:[],citations:[]};
+// ── 미리보기 재생(공용) ──
+async function playInto(vSel,mSel,cid,title,name){
+  const v=$(vSel); v.src=`/ui/contents/${cid}/video`; v.play().catch(()=>{});
+  $(mSel).innerHTML=`<div class="pttl">${esc(title)}<span class="dot">.</span></div>`+
+    `<div style="margin-bottom:12px">${name?`<span class="stk">◈ ${esc(name)}</span> · `:""}content #${cid}</div>`+
+    `<div class="loading">시나리오 불러오는 중…</div>`;
+  let s={sections:[]};
+  try{const r=await fetch(`/ui/contents/${cid}/script`); if(r.ok) s=await r.json();}catch(e){}
+  const segs=(s.sections||[]).map(x=>`<div class="seg2"><span class="k">${esc(KIND_LABEL[x.kind]||x.kind)}</span><span class="tx">${esc(x.text)}</span></div>`).join("");
+  const meta=$(mSel); const ld=meta.querySelector(".loading"); if(ld) ld.outerHTML=segs;
 }
 
-function scenarioHTML(s){
-  const segs=(s.sections||[]).map(x=>`<div class="seg"><span class="k">${esc(KIND_LABEL[x.kind]||x.kind)}</span><span class="tx">${esc(x.text)}</span></div>`).join("")||`<div class="loading">시나리오가 없습니다.</div>`;
-  const cites=(s.citations||[]).length?`<div class="cites"><div class="metaline" style="margin:0 0 6px">출처 (근거)</div>`+s.citations.map(c=>`<div class="ct">· <a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source_url)}</a></div>`).join("")+`</div>`:"";
-  return `<h3>시나리오</h3>${segs}${cites}`;
-}
-
-function renderScenario(job, s, withApprove){
-  $("#vidempty").style.display="flex"; $("#player").style.display="none";
-  const meta = `<div class="metaline">${job.name?`<span class="stk">◈ ${esc(job.name)}</span> · `:""}승인 대기 <span class="badge wait">scenario_ready</span></div>`;
-  const bar = withApprove?`<div class="approvebar"><span class="hint">▲ 시나리오를 확인하고 승인하면 쇼츠가 생성됩니다.</span><button class="act gold" id="approveBtn">승인 → 쇼츠 생성 ▶</button></div>`:"";
-  $("#pmeta").innerHTML=`<div class="pttl">${esc(job.topic)}<span class="dot">.</span></div>${meta}<div class="scene">${scenarioHTML(s)}</div>${bar}`;
-  const ab=$("#approveBtn");
-  if(ab) ab.onclick=()=>approve(job.job_id, ab);
-}
-
-async function approve(jobId, btn){
-  btn.disabled=true; btn.textContent="승인 중…";
-  try{
-    const r=await fetch(`/ui/jobs/${jobId}/approve-scenario`,{method:"POST"});
-    if(!r.ok) throw new Error(r.status);
-    toast(`승인 완료 · 쇼츠 생성 시작 (job #${jobId})`);
-    ensurePolling(); await loadJobs();
-  }catch(e){ toast("승인 실패: "+e.message,true); btn.disabled=false; btn.textContent="승인 → 쇼츠 생성 ▶"; }
-}
-
-// ── 잡 목록(카드) ──
+// ── 탭2: 잡 카드 ──
+function matches(it){if(filter==="all")return true;if(filter==="fail")return it.status==="failed";return DONE.has(it.status);}
 async function loadJobs(){
-  try{ const r=await fetch("/ui/jobs?limit=200"); if(!r.ok) throw new Error(r.status); items=(await r.json()).items||[]; }
-  catch(e){ toast("목록 조회 실패: "+e.message,true); return; }
-  renderJobs(); await refreshDraft();
-  const anyRunning=items.some(i=>RUNNING.has(i.status)) || (draftJob!=null);
-  if(anyRunning) ensurePolling(); else stopPolling();
+  try{const r=await fetch("/ui/jobs?limit=200");if(!r.ok)throw 0;items=(await r.json()).items||[];}catch(e){return;}
+  renderJobs(); refreshWizard();
+  if(items.some(i=>RUNNING.has(i.status))||wz.job!=null) ensurePolling(); else stopPolling();
 }
-function ensurePolling(){ if(!pollTimer) pollTimer=setInterval(loadJobs,2500); }
-function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
-
+function ensurePolling(){if(!pollTimer)pollTimer=setInterval(loadJobs,2500);}
+function stopPolling(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
 function renderJobs(){
   $("#n-done").textContent=items.filter(i=>DONE.has(i.status)).length;
   $("#n-fail").textContent=items.filter(i=>i.status==="failed").length;
   $("#n-all").textContent=items.length;
-  const view=items.filter(matches), grid=$("#grid");
-  if(!view.length){ grid.innerHTML=`<div class="empty">해당하는 쇼츠가 없습니다.</div>`; return; }
-  grid.innerHTML=view.map(it=>{
-    const c=cls(it.status), playable=DONE.has(it.status)&&it.content_id!=null;
+  const view=items.filter(matches),grid=$("#grid");
+  if(!view.length){grid.innerHTML=`<div class="empty">해당하는 쇼츠가 없습니다.</div>`;return;}
+  grid.innerHTML=view.map(it=>{const c=cls(it.status),playable=DONE.has(it.status)&&it.content_id!=null;
     const sel=(selected!=null&&it.content_id===selected)?" sel":"";
     const stock=it.name?`<div class="stock">◈ ${esc(it.name)}</div>`:`<div class="stock none">종목 미지정</div>`;
     return `<div class="card ${c}${sel}" data-cid="${playable?it.content_id:""}" data-title="${esc(it.topic)}" data-name="${esc(it.name||"")}">
-      <div class="jid">JOB #${it.job_id}</div>
-      <div class="ttl">${esc(it.topic)}</div>${stock}
-      <div class="foot"><span class="time">${fmt(it.created_at)} UTC</span><span class="badge ${c}">${it.status}</span></div>
-    </div>`;
+      <div class="jid">JOB #${it.job_id}</div><div class="ttl">${esc(it.topic)}</div>${stock}
+      <div class="foot"><span class="time">${fmt(it.created_at)} UTC</span><span class="badge ${c}">${it.status}</span></div></div>`;
   }).join("");
-  grid.querySelectorAll(".card").forEach(card=>{
-    card.onclick=()=>{ const cid=card.dataset.cid; if(cid) play(+cid, card.dataset.title, card.dataset.name); };
-  });
+  grid.querySelectorAll(".card").forEach(card=>card.onclick=()=>{const cid=card.dataset.cid;
+    if(!cid)return; selected=+cid; $("#pvPanel").classList.remove("hidden");
+    playInto("#player","#pmeta",+cid,card.dataset.title,card.dataset.name); renderJobs();
+    window.scrollTo({top:0,behavior:"smooth"});});
 }
-
-// ── 미리보기 재생 + 완성본 시나리오 ──
-async function play(cid, title, name){
-  selected=cid; draftJob=null;
-  const v=$("#player");
-  $("#vidempty").style.display="none"; v.style.display="block";
-  v.src=`/ui/contents/${cid}/video`; v.play().catch(()=>{});
-  $("#pmeta").innerHTML=`<div class="pttl">${esc(title)}<span class="dot">.</span></div>`+
-    `<div class="metaline">${name?`<span class="stk">◈ ${esc(name)}</span> · `:""}content #${cid}</div>`+
-    `<div class="scene"><h3>시나리오</h3><div class="loading">불러오는 중…</div></div>`;
-  const s=await fetchScript(`/ui/contents/${cid}/script`);
-  if(selected===cid){ const sc=$("#pmeta .scene"); if(sc) sc.innerHTML=scenarioHTML(s); }
-  renderJobs();
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-
-$("#tabs").addEventListener("click",e=>{ const b=e.target.closest(".tab"); if(!b)return;
-  filter=b.dataset.f; document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t===b)); renderJobs(); });
+$("#filt").onclick=e=>{const b=e.target.closest(".f");if(!b)return;filter=b.dataset.f;
+  $$("#filt .f").forEach(f=>f.classList.toggle("on",f===b));renderJobs();};
 
 loadArticles();
 loadJobs();

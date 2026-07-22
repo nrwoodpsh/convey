@@ -20,14 +20,20 @@ from pydantic import BaseModel, Field
 # ── 대시보드 엔드포인트 (content 호스트 포트, 무인증) ──
 # 워크플로우(㉓): 오늘자 기사 목록 → 선택 → 진행(초안) → 시나리오 제시 → 승인 → 쇼츠 생성.
 DASHBOARD_INDEX = ("GET", "/")  # 정적 대시보드 셸(index.html)
-UI_ARTICLES_ENDPOINT = ("GET", "/ui/articles")  # 오늘자 수집 기사 목록(선택 대상) ← research east-west
-UI_GENERATE_ENDPOINT = ("POST", "/ui/generate")  # 기사 선택 → 초안 잡(스크립트만, 승인 대기)
-UI_JOBS_ENDPOINT = ("GET", "/ui/jobs")  # 이전 잡 목록
+UI_ARTICLES_ENDPOINT = ("GET", "/ui/articles")  # 오늘자 수집 기사(항상 당일만) ← research east-west
+UI_GENERATE_ENDPOINT = ("POST", "/ui/generate")  # 기사+템플릿 선택 → 초안(스크립트만, 승인 대기)
+UI_JOBS_ENDPOINT = ("GET", "/ui/jobs")  # 생성쇼츠 탭 목록
 UI_JOB_ENDPOINT = ("GET", "/ui/jobs/{job_id}")  # 상태 폴링 → JobRes 재사용
-UI_JOB_SCRIPT_ENDPOINT = ("GET", "/ui/jobs/{job_id}/script")  # 시나리오 제시(승인 전)
-UI_APPROVE_SCENARIO_ENDPOINT = ("POST", "/ui/jobs/{job_id}/approve-scenario")  # 승인 → 합성 시작
+UI_JOB_SCRIPT_ENDPOINT = ("GET", "/ui/jobs/{job_id}/script")  # 시나리오 제시(수정 전)
+UI_JOB_SCRIPT_EDIT_ENDPOINT = ("PUT", "/ui/jobs/{job_id}/script")  # 시나리오 수정 저장(마법사 3단계)
+UI_APPROVE_SCENARIO_ENDPOINT = ("POST", "/ui/jobs/{job_id}/approve-scenario")  # 승인+배경 → 합성
 UI_VIDEO_ENDPOINT = ("GET", "/ui/contents/{content_id}/video")  # mp4 스트리밍(Range)
 UI_SCRIPT_ENDPOINT = ("GET", "/ui/contents/{content_id}/script")  # 완성본 시나리오
+
+# 시나리오 템플릿(구성·톤 3종) — 기사 선택 후 사용자가 고름. agent가 구성·문체를 달리 생성.
+SCENARIO_TEMPLATES = ("breaking", "analysis", "story")  # 속보형 · 분석형 · 스토리형
+# 배경(broll) 종류 — 실사(종목 산업 영상) · 애니(Pexels 모션그래픽·추상). ADR 0009 폴백 사슬 유지.
+BACKGROUND_KINDS = ("real", "anim")
 
 # research (east-west, gateway·HMAC) — content가 대시보드용으로 호출. research가 구현.
 RESEARCH_ARTICLES_ENDPOINT = ("GET", "/research/articles")  # 오늘자 수집 기사
@@ -51,11 +57,31 @@ class ArticleListRes(BaseModel):
 
 
 class DashboardGenerateReq(BaseModel):
-    """기사 선택 → 초안 생성. 제목=기사 제목, 종목=태깅 종목. 초안(스크립트만, 승인 대기)."""
+    """기사+템플릿 선택 → 초안 생성. 제목=기사 제목, 종목=태깅 종목. 스크립트만·승인 대기."""
 
     title: str = Field(min_length=1, max_length=200, description="쇼츠 제목(기사 제목)")
     ticker: str | None = Field(default=None, max_length=20, description="종목코드")
     article_id: int | None = Field(default=None, description="근거 기사 id(선택 출처)")
+    template: str = Field(default="analysis", description="시나리오 템플릿 breaking|analysis|story")
+
+
+class ScriptEditSection(BaseModel):
+    """수정된 시나리오 섹션(마법사 3단계). 수치(차트)는 영상에서 사실로 고정 — 텍스트만 수정."""
+
+    kind: str
+    text: str
+
+
+class ScriptEditReq(BaseModel):
+    """시나리오 수정 저장 — 편집한 섹션 텍스트로 Script 갱신."""
+
+    sections: list[ScriptEditSection] = Field(default_factory=list)
+
+
+class ApproveScenarioReq(BaseModel):
+    """시나리오 승인 + 배경 선택 → 합성 시작(마법사 4단계)."""
+
+    background: str = Field(default="real", description="배경 real(실사)|anim(애니)")
 
 
 class JobListItem(BaseModel):

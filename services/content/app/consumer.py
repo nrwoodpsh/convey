@@ -37,15 +37,17 @@ async def _set_status(job_id: int, status: JobStatus, **fields: Any) -> None:
         await session.commit()
 
 
-async def _call_agent_script(job_id: int, topic: str, ticker: str | None) -> dict[str, Any]:
-    """agent /agent/script east-west 호출(HMAC 서명)."""
+async def _call_agent_script(
+    job_id: int, topic: str, ticker: str | None, template: str = "analysis"
+) -> dict[str, Any]:
+    """agent /agent/script east-west 호출(HMAC 서명). template(㉔): 시나리오 구성·톤."""
     path = "/agent/script"
     ts, sig = sign_internal(secret=settings.gateway_internal_secret, user_id="content", path=path)
     headers = {H_USER_ID: "content", H_TIMESTAMP: ts, H_SIGNATURE: sig}
     async with httpx.AsyncClient(timeout=300) as client:
         resp = await client.post(
             f"{settings.agent_url.rstrip('/')}{path}",
-            json={"job_id": job_id, "topic": topic, "ticker": ticker},
+            json={"job_id": job_id, "topic": topic, "ticker": ticker, "template": template},
             headers=headers,
         )
         resp.raise_for_status()
@@ -63,10 +65,11 @@ async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> Non
     topic = str(event["topic"])
     ticker = event.get("ticker")
     auto = bool(event.get("auto", True))  # 값 없으면 안전값(기존 자동 경로)
+    template = str(event.get("template", "analysis"))  # 시나리오 템플릿(㉔)
     await _set_status(job_id, JobStatus.SCRIPTING)
 
     try:
-        script_res = await _call_agent_script(job_id, topic, ticker)
+        script_res = await _call_agent_script(job_id, topic, ticker, template)
     except Exception as exc:  # noqa: BLE001 — 실패는 잡에 기록하고 계속(워커 생존)
         await _set_status(job_id, JobStatus.FAILED, error=f"script: {exc}"[:500])
         logger.exception("스크립트 생성 실패 job=%s", job_id)
