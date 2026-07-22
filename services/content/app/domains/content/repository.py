@@ -1,14 +1,50 @@
-"""content 저장소 계층. TODO(/design): 잡·스크립트·자산 CRUD + 히스토리 조회."""
+"""content 저장소 계층 — 히스토리 조회(중복회피). 벡터 아님(키워드/메타, ADR 0006)."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.domains.content.models import Content, GenerationJob
 
 
 async def history_search(
     session: AsyncSession, query: str, top_k: int
 ) -> list[tuple[int, str]]:
-    """콘텐츠 히스토리 중복회피용 조회 — 키워드/메타(주제·종목·기간) 매칭. 벡터 아님.
+    """완성 콘텐츠를 주제 키워드로 조회 → (content_id, topic). 최신순. 중복회피·이력 조회용.
 
-    TODO(/design): Content·Script 메타 대상 쿼리. 반환 (content_id, text).
+    Content(완성본)가 있는 잡만. topic ILIKE(벡터 아님). 무매칭이면 빈 목록.
     """
-    raise NotImplementedError("히스토리 조회 미구현 — /builder")
+    like = f"%{query}%"
+    stmt = (
+        select(Content.id, GenerationJob.topic)
+        .join(GenerationJob, Content.job_id == GenerationJob.id)
+        .where(GenerationJob.topic.ilike(like))
+        .order_by(Content.created_at.desc())
+        .limit(top_k)
+    )
+    rows = (await session.execute(stmt)).all()
+    return [(row[0], row[1]) for row in rows]
+
+
+async def recent_ticker_job(
+    session: AsyncSession, ticker: str, *, window_days: int
+) -> bool:
+    """같은 종목의 최근(window) 잡이 있고 실패가 아니면 True — 자동 양산 중복회피 판정.
+
+    진행 중(scripting/assembling)·완료(ready/approved)도 중복으로 봄(재기동 재발행 억제).
+    실패(failed)는 재시도 허용이라 제외.
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=window_days)
+    stmt = (
+        select(func.count())
+        .select_from(GenerationJob)
+        .where(
+            GenerationJob.ticker == ticker,
+            GenerationJob.status != "failed",
+            GenerationJob.created_at >= since,
+        )
+    )
+    count = (await session.execute(stmt)).scalar_one()
+    return int(count) > 0

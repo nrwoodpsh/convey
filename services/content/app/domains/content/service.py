@@ -12,7 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.domains.content import repository
 from app.domains.content.models import GenerationJob
-from app.domains.content.schemas import GenerateRequest, JobRes, JobStatus, SearchResponse
+from app.domains.content.schemas import (
+    GenerateRequest,
+    JobRes,
+    JobStatus,
+    SearchHit,
+    SearchResponse,
+)
 
 
 def _to_res(job: GenerationJob) -> JobRes:
@@ -67,5 +73,7 @@ async def approve(session: AsyncSession, producer: KafkaProducer, job_id: int) -
 
 async def search_history(session: AsyncSession, query: str, top_k: int) -> SearchResponse:
     """콘텐츠 히스토리 조회 — 중복회피(키워드/메타). 벡터 아님(ADR 0006)."""
-    _ = repository  # 자리표시 (구현: history_search)
-    return SearchResponse(hits=[])
+    rows = await repository.history_search(session, query, top_k)
+    return SearchResponse(
+        hits=[SearchHit(content_id=cid, text=text, score=1.0) for (cid, text) in rows]
+    )

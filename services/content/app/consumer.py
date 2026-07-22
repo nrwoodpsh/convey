@@ -16,7 +16,7 @@ from common.security import H_SIGNATURE, H_TIMESTAMP, H_USER_ID, sign_internal
 
 from app.config import settings
 from app.db import SessionLocal
-from app.domains.content import service
+from app.domains.content import repository, service
 from app.domains.content.models import Content, GenerationJob, Script
 from app.domains.content.schemas import GenerateRequest, JobStatus
 
@@ -166,8 +166,14 @@ async def handle_issue(event: dict[str, Any], producer: KafkaProducer) -> None:
     if not ticker:
         return
     name = str(event.get("name") or ticker)
-    req = GenerateRequest(topic=f"{name} 이슈", ticker=ticker)
     async with SessionLocal() as session:
+        # 중복회피(A2): 같은 종목 최근 잡 있으면 skip (자동 양산 스팸 방지)
+        if await repository.recent_ticker_job(
+            session, ticker, window_days=settings.dedup_window_days
+        ):
+            logger.info("중복회피: ticker=%s 최근 잡 존재 → 자동 생성 skip", ticker)
+            return
+        req = GenerateRequest(topic=f"{name} 이슈", ticker=ticker)
         job_id = await service.start_generation(session, producer, req, owner_id="auto")
     logger.info("자동 양산 잡 생성 job=%s ticker=%s", job_id, ticker)
 
