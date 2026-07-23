@@ -28,7 +28,7 @@ from app.render import (
 )
 
 _EMPHASIS_KINDS = ("chart", "relation")  # 금색 강조 구간(㉖)
-from app.tts import make_engine
+from app.tts import make_engine, synthesize_batch
 
 
 def _audio_duration(path: str) -> float | None:
@@ -47,24 +47,32 @@ def _audio_duration(path: str) -> float | None:
 _GAP = 0.35  # 구간 사이 무음(초) — 자연스러운 쉼
 
 
-def _segment_audio(
+async def _synth_segments(
     segments: list[dict[str, Any]], base: str,
-) -> tuple[str | None, list[tuple[str, str, float, float]]]:
-    """구간별 TTS(㉕/C3) → 무음 연결 오디오 + 구간 타이밍(kind,text,start,end).
-
-    하나라도 합성 실패(무음 엔진·오프라인)면 (None, []) → 호출측이 단일 내레이션으로 폴백.
-    """
-    engine = make_engine()
-    parts: list[tuple[str, str, str, float]] = []  # (mp3, kind, text, dur)
+) -> list[tuple[str, str, str]] | None:
+    """구간별 TTS **병렬 합성**(㉘) → [(mp3, kind, text)]. 하나라도 실패면 None(단일 폴백)."""
+    jobs: list[tuple[str, str]] = []
+    meta: list[tuple[str, str]] = []  # (kind, text)
     for i, seg in enumerate(segments):
         text = str(seg.get("text", "")).strip()
         if not text:
             continue
-        mp3 = engine.synthesize(text, f"{base}-seg{i}")
-        if not mp3:
-            return None, []
-        parts.append((mp3, str(seg.get("kind", "")), text, _audio_duration(mp3) or 0.0))
-    if len(parts) < 2:
+        jobs.append((text, f"{base}-seg{i}"))
+        meta.append((str(seg.get("kind", "")), text))
+    if len(jobs) < 2:
+        return None
+    mp3s = await synthesize_batch(make_engine(), jobs)
+    if any(m is None for m in mp3s):
+        return None
+    return [(str(mp3), kind, text) for mp3, (kind, text) in zip(mp3s, meta, strict=True)]
+
+
+def _concat_segments(
+    parts: list[tuple[str, str, str]], base: str,
+) -> tuple[str | None, list[tuple[str, str, float, float]]]:
+    """합성된 구간 mp3들을 무음(_GAP)으로 연결 + 구간 타이밍(kind,text,start,end) 산출."""
+    durs = [(mp3, kind, text, _audio_duration(mp3) or 0.0) for (mp3, kind, text) in parts]
+    if len(durs) < 2:
         return None, []
     try:
         sil = f"{base}-sil.mp3"
@@ -75,9 +83,9 @@ def _segment_audio(
         )
         listfile = f"{base}-concat.txt"
         lines: list[str] = []
-        for i, (mp3, _k, _t, _d) in enumerate(parts):
+        for i, (mp3, _k, _t, _d) in enumerate(durs):
             lines.append(f"file '{mp3}'")
-            if i < len(parts) - 1:
+            if i < len(durs) - 1:
                 lines.append(f"file '{sil}'")
         with open(listfile, "w") as f:
             f.write("\n".join(lines))
@@ -91,7 +99,7 @@ def _segment_audio(
         return None, []
     caps: list[tuple[str, str, float, float]] = []
     t = 0.0
-    for (_mp3, kind, text, dur) in parts:
+    for (_mp3, kind, text, dur) in durs:
         caps.append((kind, text, t, t + dur))
         t += dur + _GAP
     return out, caps
@@ -141,11 +149,13 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
             badge_txt = f"출처 {trust['source_host']} · {trust['published_date']}"
         await asyncio.to_thread(render_outro_card, badge_txt or "", outro_png)
 
-        # 구간 TTS(㉕/C) — 구간별 합성→싱크 자막(kind 보유). 실패 시 단일 내레이션 폴백.
+        # 구간 TTS(㉕/C·㉘ 병렬) — 구간별 합성(gather)→싱크 자막. 실패 시 단일 내레이션 폴백.
         raw_caps: list[tuple[str, str, float, float]] = []
         audio_path: str | None = None
         if segments:
-            audio_path, raw_caps = await asyncio.to_thread(_segment_audio, segments, base)
+            parts = await _synth_segments(segments, base)  # 병렬 합성
+            if parts is not None:
+                audio_path, raw_caps = await asyncio.to_thread(_concat_segments, parts, base)
         if audio_path is None:  # 폴백: 단일 내레이션(구간 자막 없음)
             audio_path = await asyncio.to_thread(make_engine().synthesize, narration, f"{base}-tts")
             raw_caps = []
