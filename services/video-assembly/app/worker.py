@@ -34,6 +34,59 @@ def _audio_duration(path: str) -> float | None:
     except (subprocess.CalledProcessError, OSError, ValueError):
         return None
 
+
+_GAP = 0.35  # 구간 사이 무음(초) — 자연스러운 쉼
+
+
+def _segment_audio(
+    segments: list[dict[str, Any]], base: str,
+) -> tuple[str | None, list[tuple[str, float, float]]]:
+    """구간별 TTS(㉕/C3) → 무음 연결 오디오 + 구간 타이밍(자막 싱크용).
+
+    하나라도 합성 실패(무음 엔진·오프라인)면 (None, []) → 호출측이 단일 내레이션으로 폴백.
+    """
+    engine = make_engine()
+    parts: list[tuple[str, str, float]] = []  # (mp3, text, dur)
+    for i, seg in enumerate(segments):
+        text = str(seg.get("text", "")).strip()
+        if not text:
+            continue
+        mp3 = engine.synthesize(text, f"{base}-seg{i}")
+        if not mp3:
+            return None, []
+        parts.append((mp3, text, _audio_duration(mp3) or 0.0))
+    if len(parts) < 2:
+        return None, []
+    try:
+        sil = f"{base}-sil.mp3"
+        subprocess.run(
+            ["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+             "-t", str(_GAP), "-c:a", "libmp3lame", sil],
+            check=True, capture_output=True,
+        )
+        listfile = f"{base}-concat.txt"
+        lines: list[str] = []
+        for i, (mp3, _t, _d) in enumerate(parts):
+            lines.append(f"file '{mp3}'")
+            if i < len(parts) - 1:
+                lines.append(f"file '{sil}'")
+        with open(listfile, "w") as f:
+            f.write("\n".join(lines))
+        out = f"{base}-tts.mp3"
+        subprocess.run(
+            ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", listfile,
+             "-c:a", "libmp3lame", out],
+            check=True, capture_output=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None, []
+    caps: list[tuple[str, float, float]] = []
+    t = 0.0
+    for (_mp3, text, dur) in parts:
+        caps.append((text, t, t + dur))
+        t += dur + _GAP
+    return out, caps
+
 configure_logging(settings.log_level)
 logger = logging.getLogger("video-assembly")
 
@@ -47,6 +100,12 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
     narration = str(event.get("narration", "")) or subtitle
     broll_query = str(event.get("broll_query", "")) or title
     duration = float(event.get("duration", 6.0))
+    segments = event.get("segments") or []  # 구간 자막·음성(㉕/C)
+    trust = event.get("trust") or {}
+    badge = (
+        f"출처 {trust['source_host']} · {trust['published_date']}"
+        if trust.get("source_host") else None
+    )
 
     os.makedirs(settings.media_dir, exist_ok=True)
     base = os.path.join(settings.media_dir, f"job-{job_id}")
@@ -63,8 +122,14 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
             stock_label=stock_label(str(chart["ticker"])),  # '현대차(005380)' — 코드만 X
         )
         await asyncio.to_thread(render_chart, overlay, chart_png)  # 투명 오버레이
-        # 로컬 TTS(무료) — 없으면 무음. 음성 있으면 영상 길이를 음성에 맞춤.
-        audio_path = await asyncio.to_thread(make_engine().synthesize, narration, f"{base}-tts")
+        # 구간 TTS(㉕/C) — 구간별 합성→싱크 자막. 실패 시 단일 내레이션 폴백.
+        captions: list[tuple[str, float, float]] = []
+        audio_path: str | None = None
+        if segments:
+            audio_path, captions = await asyncio.to_thread(_segment_audio, segments, base)
+        if audio_path is None:  # 폴백: 단일 내레이션(구간 자막 없음)
+            audio_path = await asyncio.to_thread(make_engine().synthesize, narration, f"{base}-tts")
+            captions = []
         if audio_path:
             audio_dur = _audio_duration(audio_path)
             if audio_dur:
@@ -86,17 +151,20 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
                 await asyncio.to_thread(
                     build_short_video, broll.path, chart_png, out_mp4,
                     duration=duration, audio_path=audio_path, subtitle=subtitle,
+                    captions=captions or None, badge=badge,
                 )
             else:  # photo → 켄번즈
                 await asyncio.to_thread(
                     build_short, broll.path, chart_png, out_mp4,
                     duration=duration, audio_path=audio_path, subtitle=subtitle,
+                    captions=captions or None, badge=badge,
                 )
         else:  # 폴백: 로컬 타이틀 카드(현행)
             await asyncio.to_thread(render_title_card, title, bg_png)
             await asyncio.to_thread(
                 build_short, bg_png, chart_png, out_mp4,
                 duration=duration, audio_path=audio_path, subtitle=subtitle,
+                captions=captions or None, badge=badge,
             )
     except Exception as exc:  # noqa: BLE001 — 실패도 회신(잡을 failed로)
         await producer.publish(

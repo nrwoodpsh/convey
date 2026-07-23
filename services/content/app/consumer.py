@@ -8,6 +8,7 @@ content는 잡 상태머신을 소유하고, 두 흐름을 소비한다:
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -104,6 +105,8 @@ async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> Non
     event_out = media.build_assemble_event(
         job_id=job_id, topic=topic, ticker=ticker, chart=chart,
         sections=sections, narration_max_chars=settings.narration_max_chars,
+        citations=script_res.get("citations", []),
+        date=datetime.now(timezone.utc).date().isoformat(),
     )
     await producer.publish(settings.topic_assemble, event_out, key=str(job_id))
     logger.info("media.assemble 발행 job=%s script=%s", job_id, script_id)

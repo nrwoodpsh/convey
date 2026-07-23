@@ -12,6 +12,50 @@ import subprocess
 _FONT = os.path.join(os.path.dirname(__file__), "assets", "NanumGothic.ttf")
 _FONTFILE = f"fontfile={_FONT}:" if os.path.exists(_FONT) else ""
 
+# 구간 자막 = (텍스트, 시작초, 끝초)
+Caption = tuple[str, float, float]
+
+
+def _esc(s: str) -> str:
+    """drawtext text 이스케이프 — 특수문자 제거/치환(필터 파서 보호)."""
+    return s.replace("\\", "").replace(":", r"\:").replace("'", "").replace("%", "").replace("\n", " ")
+
+
+def _shorten(s: str, n: int = 30) -> str:
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def _drawtext(text: str, *, size: int, y: str, x: str = "(w-text_w)/2",
+              alpha: float = 0.5, enable: str = "") -> str:
+    en = f":enable='{enable}'" if enable else ""
+    return (
+        f"drawtext={_FONTFILE}text='{_esc(text)}':fontcolor=white:fontsize={size}:"
+        f"box=1:boxcolor=black@{alpha}:boxborderw=10:x={x}:y={y}{en}"
+    )
+
+
+def _text_layer(
+    captions: list[Caption] | None, subtitle: str | None, badge: str | None
+) -> str:
+    """자막(구간 싱크 or 단일 폴백) + 신뢰 배지 → drawtext 체인. 없으면 빈 문자열."""
+    draws: list[str] = []
+    if captions:
+        for text, start, end in captions:
+            draws.append(_drawtext(
+                _shorten(text), size=44, y="h-240",
+                enable=f"between(t,{start:.2f},{end:.2f})",
+            ))
+    elif subtitle:
+        draws.append(_drawtext(_shorten(subtitle, 40), size=48, y="h-240"))
+    if badge:
+        # 신뢰 배지 — 우상단, 작게·상시(정확 데이터 알파 체감)
+        draws.append(_drawtext(
+            _shorten(badge, 34), size=30, y="46", x="w-text_w-34", alpha=0.4,
+        ))
+    if not draws:
+        return ""
+    return ";[v]" + ",".join(draws) + "[v]"
+
 
 def build_short(
     image_path: str,
@@ -22,8 +66,10 @@ def build_short(
     fps: int = 30,
     audio_path: str | None = None,
     subtitle: str | None = None,
+    captions: list[Caption] | None = None,
+    badge: str | None = None,
 ) -> str:
-    """정지 이미지 → 쇼츠 영상. 켄번즈(zoompan) 모션 + 차트 오버레이 + (자막) + 오디오. 9:16.
+    """정지 이미지 → 쇼츠 영상. 켄번즈(zoompan) 모션 + 차트 오버레이 + (구간 자막·배지) + 오디오. 9:16.
 
     생성형 영상 없이 이미지만으로 영상을 만든다(ADR 0006). 수치·차트는 chart_png(정확 렌더).
     """
@@ -33,12 +79,7 @@ def build_short(
         f"zoompan=z='min(zoom+0.0004,1.15)':d={frames}:s=1080x1920:fps={fps},setsar=1[bg];"
         "[bg][1:v]overlay=(W-w)/2:(H-h)/2[v]"
     )
-    if subtitle:
-        safe = subtitle.replace("\\", "").replace(":", r"\:").replace("'", "")
-        vf += (
-            f";[v]drawtext={_FONTFILE}text='{safe}':fontcolor=white:fontsize=48:box=1:"
-            "boxcolor=black@0.5:boxborderw=12:x=(w-text_w)/2:y=h-240[v]"
-        )
+    vf += _text_layer(captions, subtitle, badge)
     cmd = ["ffmpeg", "-y", "-loop", "1", "-i", image_path, "-loop", "1", "-i", chart_png]
     if audio_path:
         cmd += ["-i", audio_path]
@@ -62,8 +103,10 @@ def build_short_video(
     fps: int = 30,
     audio_path: str | None = None,
     subtitle: str | None = None,
+    captions: list[Caption] | None = None,
+    badge: str | None = None,
 ) -> str:
-    """영상 배경(스톡 broll) → 쇼츠. 배경 영상 9:16 크롭·반복 + (투명)차트 오버레이 + 자막 + 오디오.
+    """영상 배경(스톡 broll) → 쇼츠. 배경 9:16 크롭·반복 + 차트 오버레이 + (구간 자막·배지) + 오디오.
 
     켄번즈 대신 배경 자체 모션 사용(B-2). chart_png는 투명 1080×1920(배경 노출).
     """
@@ -71,12 +114,7 @@ def build_short_video(
         "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[bg];"
         "[bg][1:v]overlay=(W-w)/2:(H-h)/2[v]"
     )
-    if subtitle:
-        safe = subtitle.replace("\\", "").replace(":", r"\:").replace("'", "")
-        vf += (
-            f";[v]drawtext={_FONTFILE}text='{safe}':fontcolor=white:fontsize=48:box=1:"
-            "boxcolor=black@0.5:boxborderw=12:x=(w-text_w)/2:y=h-240[v]"
-        )
+    vf += _text_layer(captions, subtitle, badge)
     cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", video_path, "-loop", "1", "-i", chart_png]
     if audio_path:
         cmd += ["-i", audio_path]

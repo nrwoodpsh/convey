@@ -100,11 +100,14 @@ async def approve_scenario(
         raise AppError("CNT003", "차트 근거가 없어 승인할 수 없습니다.", status=409)
     script = await repository.get_script_by_job(session, job_id)
     sections = script.sections if script is not None else []
+    citations = script.citations if script is not None else []
     event = media.build_assemble_event(
         job_id=job_id, topic=job.topic, ticker=job.ticker,
         chart=job.chart, sections=sections,
         narration_max_chars=settings.narration_max_chars,
         background=background,
+        citations=citations,
+        date=job.created_at.date().isoformat(),
     )
     job.status = JobStatus.ASSEMBLING.value
     await session.commit()
