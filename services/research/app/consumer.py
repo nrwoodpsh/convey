@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 from common.kafka import consume_forever
 from common.security import H_SIGNATURE, H_TIMESTAMP, H_USER_ID, sign_internal
-from common.stocks import sector_of
+from common.stocks import STOCK_NAMES, sector_of
 from neo4j import GraphDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +30,8 @@ from app.extract.relations import extract_relations
 from app.graph.neo4j_repo import GraphRepo
 
 logger = logging.getLogger("research.consumer")
+
+_STOCK_NAMES_SET = set(STOCK_NAMES.values())  # 종목명 집합(사건 엣지 대상 판정)
 
 
 async def handle_ingested(
@@ -72,22 +74,30 @@ async def handle_ingested(
     else:
         relations = []
 
-    # 단일 종목 기사도 그래프에 남도록 결정론적 종목→섹터 엣지(㉕/A3, LLM 미개입·근거=article).
-    sector_edges = 0
+    # 결정론적 그래프 엣지(LLM 미개입·근거=article):
+    #  - 종목→섹터 BELONGS_TO (㉕/A3)  - 종목→사건 HAS_EVENT (㉙/E3, DART 공시 등 event_hints)
+    event_hints = [str(h) for h in event.get("event_hints", [])]
+    det_edges = 0
     for ent in entities:
-        sector = sector_of(str(ent))
+        e = str(ent)
+        sector = sector_of(e)
         if sector:
             await asyncio.to_thread(
-                graph.upsert_relation, str(ent), "BELONGS_TO", sector,
-                source_article_id=article.id,
+                graph.upsert_relation, e, "BELONGS_TO", sector, source_article_id=article.id,
             )
-            sector_edges += 1
+            det_edges += 1
+        if sector_of(e) or e in _STOCK_NAMES_SET:  # 종목 엔티티면 사건 엣지
+            for hint in event_hints:
+                await asyncio.to_thread(
+                    graph.upsert_relation, e, "HAS_EVENT", hint, source_article_id=article.id,
+                )
+                det_edges += 1
 
     logger.info(
-        "research.ingested 처리: article=%s relations=%s sector_edges=%s",
-        article.id, len(relations), sector_edges,
+        "research.ingested 처리: article=%s relations=%s det_edges=%s",
+        article.id, len(relations), det_edges,
     )
-    return article.id, len(relations) + sector_edges
+    return article.id, len(relations) + det_edges
 
 
 async def handle_tick(event: dict[str, Any], session: AsyncSession) -> tuple[int, bool]:

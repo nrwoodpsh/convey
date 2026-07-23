@@ -26,7 +26,14 @@ class Settings(BaseAppSettings):
     macro_poll_interval_seconds: float = 86400.0  # 거시 폴링(저빈도 — 일 1회)
 
     # 소스 (ADR 0008): 무료
-    feed_urls: str = "https://www.yna.co.kr/rss/economy.xml,https://www.hankyung.com/feed/economy"
+    # 경제 뉴스 RSS 확대(㉙/E2) — 연합·한경 + 매경·이데일리·서울경제. 실패 피드는 건너뜀(RssClient).
+    feed_urls: str = (
+        "https://www.yna.co.kr/rss/economy.xml,"
+        "https://www.hankyung.com/feed/economy,"
+        "https://www.mk.co.kr/rss/30100041/,"
+        "https://rss.edaily.co.kr/economy_news.xml,"
+        "https://www.sedaily.com/RSS/S1N1.xml"
+    )
     dart_api_key: str = ""  # opendart.fss.or.kr (무료). 없으면 공시 스킵
     naver_client_id: str = ""  # developers.naver.com 검색 API (무료). 없으면 뉴스검색 스킵
     naver_client_secret: str = ""

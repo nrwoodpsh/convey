@@ -18,23 +18,29 @@ EVENT_KEYWORDS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _suppress_substrings(names: list[str]) -> list[str]:
+    """부분 문자열 이름 제거(㉙/E2) — 'SK'가 'SK하이닉스'에 포함되면 짧은 쪽 제거(오탐 방지)."""
+    return [n for n in names if not any(n != m and n in m for m in names)]
+
+
 def tag_tickers(text: str, dictionary: dict[str, str] | None = None) -> list[str]:
     """본문에서 **사전에 있는 종목만** 태깅. 등장 순서 유지·중복 제거. 사전 밖은 태깅 안 함."""
     d = dictionary or TICKER_DICT
+    matched = _suppress_substrings([name for name in d if name in text])
     tagged: list[str] = []
-    for name, ticker in d.items():
-        if name in text and ticker not in tagged:
-            tagged.append(ticker)
+    for name in matched:
+        if d[name] not in tagged:
+            tagged.append(d[name])
     return tagged
 
 
 def tag_entity_names(text: str, names: tuple[str, ...] | None = None) -> list[str]:
     """본문에 등장하는 사전 엔티티 **이름** 목록(관계추출 allowed용) — 종목 + 섹터(㉕/A3).
 
-    사전 밖은 포함 안 함(환각 방지). 등장 순서는 사전 순서.
+    사전 밖은 포함 안 함(환각 방지). 짧은 부분 문자열 이름은 긴 이름에 포함되면 제거(㉙/E2).
     """
     allow = names or ENTITY_NAMES
-    return [name for name in allow if name in text]
+    return _suppress_substrings([name for name in allow if name in text])
 
 
 def tag_event_hints(text: str) -> list[str]:
