@@ -17,8 +17,8 @@ def test_numbers_come_from_data_not_llm() -> None:
     # LLM이 "종가 99999원"이라 해도 슬롯 수치는 입력 price에서만
     script = build_script("삼성전자", PRICE, FACTS, lambda _: "무조건 종가 99999원 급등!!")
     chart = next(s for s in script.sections if s.kind == "chart")
-    assert chart.data_slots["close"] == "71900"  # LLM의 99999 아님
-    assert chart.data_slots["change_pct"] == "2.34"
+    assert chart.data_slots["close"] == "71,900"  # 데이터값(표기 정리, ㉗) — LLM의 99999 아님
+    assert chart.data_slots["change_pct"] == "+2.34"
 
 
 def test_every_citation_has_source() -> None:

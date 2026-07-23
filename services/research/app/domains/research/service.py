@@ -71,14 +71,22 @@ async def search(
         fact_rows = fact_rows[:top_k]
     else:
         fact_rows = await repository.fact_search(session, query, top_k, window_days=window_days)
-    # 사실 중복 제거(㉕/A2) — 정규화 제목이 같은 near-duplicate 헤드라인 병합(최신 우선 유지).
-    seen_titles: set[str] = set()
+    # 사실 중복 제거(㉕/A2·㉗/P2) — 토큰 자카드로 근사 중복 헤드라인 병합(최신 우선).
+    # 말줄임(…) 앞 핵심부만 비교(꼬리 문구 차이에 강건). 의미 중복(동의어)은 임베딩 필요(ADR 0006 제외).
+    def _tok(t: str) -> set[str]:
+        head = re.split(r"…|···|\.\.\.", t)[0]
+        return {w for w in re.sub(r"[^0-9a-z가-힣 ]", " ", head.lower()).split() if len(w) > 1}
+
+    kept_toks: list[set[str]] = []
     deduped_rows: list[tuple[int, str, str]] = []
     for aid, title, url in fact_rows:
-        key = re.sub(r"[^0-9a-z가-힣]", "", title.lower())[:40]
-        if key and key in seen_titles:
+        toks = _tok(title)
+        dup = any(
+            toks and k and len(toks & k) / len(toks | k) >= 0.4 for k in kept_toks
+        )
+        if dup:
             continue
-        seen_titles.add(key)
+        kept_toks.append(toks)
         deduped_rows.append((aid, title, url))
     facts = [
         FactHit(kind="article", text=title, source_url=url, ref_id=aid)

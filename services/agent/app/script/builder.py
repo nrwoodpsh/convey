@@ -76,11 +76,29 @@ def _no_new_digits(out: str, allowed: str) -> bool:
     return all(n.replace(",", "") in allowed_nums for n in _DIGIT_RE.findall(out))
 
 
+# 거시 표시 정리(㉗/P3) — 노이즈 단위 생략 + 지표명 축약(사전 밖은 원명·임의 축약 금지).
+_MACRO_UNIT_DROP = ("=100", "1982-84", "2020=")
+_MACRO_NAME_SHORT: dict[str, str] = {
+    "원달러환율(매매기준율)": "원/달러 환율",
+    "연방기금금리(실효)": "미 기준금리",
+    "한국은행 기준금리": "한은 기준금리",
+    "미 소비자물가지수": "미 CPI",
+    "소비자물가지수": "CPI",
+}
+
+
+def _macro_disp(m: MacroEvidence) -> str:
+    """거시 1개 표시 문자열 — 지표명 축약 + 노이즈 단위 생략. 값 불변(사실)."""
+    name = _MACRO_NAME_SHORT.get(m["name"], m["name"])
+    unit = "" if any(x in m["unit"] for x in _MACRO_UNIT_DROP) else m["unit"]
+    return f"{name} {m['value']:g}{(' ' + unit) if unit else ''}".strip()
+
+
 def _macro_sentence(macros: list[MacroEvidence]) -> tuple[str, dict[str, str]]:
-    """거시 → 짧은 문장(㉕/B2) — 숫자 덤프 대신 2개만, 값은 슬롯. LLM 미개입(수치=사실)."""
+    """거시 → 짧은 문장(㉕/B2·㉗/P3) — 2개만, 지표명 축약·노이즈 단위 제거. 값=사실."""
     picks = macros[:2]
     slots = {m["name"]: f"{m['value']} {m['unit']}".strip() for m in picks}
-    body = ", ".join(f"{m['name']} {slots[m['name']]}" for m in picks)
+    body = ", ".join(_macro_disp(m) for m in picks)
     return f"거시 환경도 함께 보면, {body} 수준입니다.", slots
 
 
@@ -158,8 +176,9 @@ def build_script(
     valid_rels = [r for r in relations if r.get("source_url")][:n_rels]
 
     ticker = price["ticker"]
-    close = str(price["close"])
-    change = f"{price['change_pct']:.2f}"
+    # 표기 정리(㉗/P1) — 천단위·부호·소수 제거. 값 자체 불변(사실).
+    close = f"{round(price['close']):,}"
+    change = f"{price['change_pct']:+.2f}"
     # 종목은 코드가 아니라 한글명으로 노출(㉓ — 시나리오·내레이션·자막에서 코드 낭독 제외).
     # 사전 밖이면 접두 생략(없는 이름 지어내지 않음 — 환각 금지).
     name = stock_name(ticker)

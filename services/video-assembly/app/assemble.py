@@ -21,12 +21,31 @@ Caption = tuple[str, float, float, bool]
 
 
 def _esc(s: str) -> str:
-    """drawtext text 이스케이프 — 특수문자 제거/치환(필터 파서 보호)."""
-    return s.replace("\\", "").replace(":", r"\:").replace("'", "").replace("%", "").replace("\n", " ")
+    """drawtext text 이스케이프 — 특수문자 제거/치환(개행은 유지 — 자막 줄바꿈용)."""
+    return s.replace("\\", "").replace(":", r"\:").replace("'", "").replace("%", "")
 
 
 def _shorten(s: str, n: int = 30) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def _wrap(text: str, width: int = 18, max_lines: int = 2) -> str:
+    """긴 자막 줄바꿈(㉗/P4) — 공백 우선, 없으면 글자 수. 초과분 말줄임. drawtext 실제 개행."""
+    text = text.strip()
+    lines: list[str] = []
+    while text and len(lines) < max_lines:
+        if len(text) <= width:
+            lines.append(text)
+            text = ""
+            break
+        cut = text.rfind(" ", 0, width + 1)
+        if cut <= 0:
+            cut = width
+        lines.append(text[:cut].strip())
+        text = text[cut:].strip()
+    if text and lines:  # 남은 초과분 → 마지막 줄 말줄임
+        lines[-1] = (lines[-1][: width - 1] + "…") if len(lines[-1]) >= width else lines[-1] + "…"
+    return "\n".join(lines)
 
 
 def _drawtext(text: str, *, size: int, y: str, x: str = "(w-text_w)/2",
@@ -85,14 +104,14 @@ def _run(
     if captions:
         for text, start, end, gold in captions:
             draws.append(_drawtext(
-                _shorten(text), size=44, y="h-240",
+                _wrap(text), size=44, y="h-280",
                 color=_GOLD if gold else "white",
                 enable=f"between(t,{start:.2f},{end:.2f})",
             ))
     elif subtitle:
-        draws.append(_drawtext(_shorten(subtitle, 40), size=48, y="h-240"))
+        draws.append(_drawtext(_wrap(subtitle), size=48, y="h-280"))
     if badge:
-        draws.append(_drawtext(_shorten(badge, 34), size=30, y="46", x="w-text_w-34", alpha=0.4))
+        draws.append(_drawtext(_shorten(badge, 44), size=30, y="46", x="w-text_w-34", alpha=0.4))
     if draws:
         parts.append("[v]" + ",".join(draws) + "[v]")
     # 인트로/아웃트로 전면 카드(불투명) — enable 시간창으로 배경 위를 덮음
