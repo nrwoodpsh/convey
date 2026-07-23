@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TypedDict
@@ -54,6 +55,35 @@ def _josa(word: str, with_batchim: str, without: str) -> str:
     return without
 
 
+def _clean_fact(text: str) -> str:
+    """헤드라인 정리(㉕/B1) — [태그]·글머리표 제거, 말줄임(···) 앞에서 컷, 공백 정리. 사실 불변.
+
+    LLM 미개입(사실 왜곡 방지) — 순수 정리. 결과가 비면 원문 유지.
+    """
+    t = re.split(r"…|···|\.\.\.", text)[0]  # 잘린 말줄임 뒤 버림
+    t = re.sub(r"^\s*(\[[^\]]*\]\s*)+", "", t)  # 앞머리 [태그]
+    t = re.sub(r"^\s*[①-⑳▶▷◆■※·\-–—]+\s*", "", t)  # 글머리표
+    t = re.sub(r"\s+", " ", t).strip(" ·-–—")
+    return t or text.strip()
+
+
+_DIGIT_RE = re.compile(r"\d[\d,\.]*")
+
+
+def _no_new_digits(out: str, allowed: str) -> bool:
+    """citation guard — 생성 문장의 숫자가 모두 허용 텍스트(사실)에 있으면 True(환각 수치 차단)."""
+    allowed_nums = {n.replace(",", "") for n in _DIGIT_RE.findall(allowed)}
+    return all(n.replace(",", "") in allowed_nums for n in _DIGIT_RE.findall(out))
+
+
+def _macro_sentence(macros: list[MacroEvidence]) -> tuple[str, dict[str, str]]:
+    """거시 → 짧은 문장(㉕/B2) — 숫자 덤프 대신 2개만, 값은 슬롯. LLM 미개입(수치=사실)."""
+    picks = macros[:2]
+    slots = {m["name"]: f"{m['value']} {m['unit']}".strip() for m in picks}
+    body = ", ".join(f"{m['name']} {slots[m['name']]}" for m in picks)
+    return f"거시 환경도 함께 보면, {body} 수준입니다.", slots
+
+
 def _relation_sentence(rel: RelationEvidence) -> str:
     """그래프 관계 근거 → 한국어 문장(사실 관계의 한국어화, 수치·창작 아님). 조사 자동."""
     s, o, edge = rel["subject"], rel["object"], rel["edge"]
@@ -94,11 +124,11 @@ class Script:
 # 사용 사실 개수·거시 포함·마무리(closing) 여부·훅 문체를 달리한다. 기본 analysis(회귀 0).
 _TEMPLATES: dict[str, dict[str, object]] = {
     "breaking": {"facts": 1, "relations": 1, "macro": False, "closing": False,
-                 "hook": "속보처럼 급박하게 한 문장. 숫자 금지."},
+                 "hook": "속보 톤(급박하게)"},
     "analysis": {"facts": 3, "relations": 2, "macro": True, "closing": False,
-                 "hook": "주식 쇼츠 도입 문장 1개. 숫자·수치는 쓰지 말 것. 한 문장."},
+                 "hook": "담백한 분석 톤"},
     "story": {"facts": 2, "relations": 1, "macro": True, "closing": True,
-              "hook": "이야기를 여는 도입 문장 1개. 숫자 금지. 한 문장."},
+              "hook": "이야기를 여는 도입 톤"},
 }
 
 
@@ -135,8 +165,18 @@ def build_script(
     name = stock_name(ticker)
     stock_prefix = f"{name} " if name else ""
 
-    # 연결 문장(LLM) — 숫자 없이 prose만. 수치는 아래 chart 슬롯에서만.
-    hook = llm(f"'{topic}' {tpl['hook']}").strip()
+    # 헤드라인 정리(B1) — [태그]·말줄임 제거. 사실 왜곡 없음(LLM 미개입).
+    clean_facts = [_clean_fact(f["text"]) for f in used_facts]
+    lead = clean_facts[0] if clean_facts else topic
+
+    # 훅(LLM 연결자, B1) — 실제 뉴스에 근거한 도입 문장. 수치는 citation guard로 차단.
+    allowed = f"{topic} {lead} {close} {change}"
+    raw_hook = llm(
+        "다음 뉴스로 주식 쇼츠를 여는 훅 한 문장을 써라.\n"
+        f"뉴스: {topic}\n핵심: {lead}\n"
+        f"조건: {tpl['hook']}, 종목명 포함, 40자 이내, 숫자·과장·따옴표 금지."
+    ).strip().strip("\"'“”")
+    hook = raw_hook if (raw_hook and _no_new_digits(raw_hook, allowed)) else f"{name or ticker} 관련 이슈, 지금 짚어봅니다"
 
     sections = [
         ScriptSection("hook", hook),
@@ -148,28 +188,27 @@ def build_script(
     ]
     # 관계(인과) 섹션 — 그래프 근거(알파). 수치 없음, 사실 관계만.
     sections.extend(ScriptSection("relation", _relation_sentence(rel)) for rel in valid_rels)
-    sections.extend(ScriptSection("fact", fact["text"]) for fact in used_facts)
+    sections.extend(ScriptSection("fact", ct) for ct in clean_facts)
 
     citations = [
         Citation(f"{ticker} 종가 {close}원 / 등락률 {change}%", price["source_url"], price["ref_id"]),
         *[Citation(_relation_sentence(r), r["source_url"], r["article_id"]) for r in valid_rels],
-        *[Citation(fact["text"], fact["source_url"], fact["ref_id"]) for fact in used_facts],
+        *[Citation(f["text"], f["source_url"], f["ref_id"]) for f in used_facts],
     ]
 
-    # 거시 맥락 섹션 — 수치는 macro 슬롯에서만(사실), LLM 미개입.
+    # 거시 맥락 섹션 — 짧은 문장(B2), 수치는 슬롯(사실), LLM 미개입.
     if use_macro and macros:
-        slots = {m["name"]: f"{m['value']} {m['unit']}".strip() for m in macros}
-        summary = ", ".join(f"{m['name']} {slots[m['name']]}" for m in macros)
-        sections.append(ScriptSection("macro", f"거시 맥락 — {summary}", slots))
+        macro_text, slots = _macro_sentence(macros)
+        sections.append(ScriptSection("macro", macro_text, slots))
         citations.extend(
-            Citation(f"{m['name']} {slots[m['name']]}", m["source_url"], m["ref_id"])
-            for m in macros
+            Citation(f"{m['name']} {m['value']} {m['unit']}".strip(), m["source_url"], m["ref_id"])
+            for m in macros[:2]
         )
 
-    # 스토리형 마무리(전망) — 숫자 없는 연결 문장(LLM), 근거 결속 없음(전망 문장).
+    # 스토리형 마무리(전망) — 숫자 없는 연결 문장(LLM), citation guard(수치 차단).
     if use_closing:
-        closing = llm(f"'{topic}' 쇼츠를 닫는 전망 한 문장. 숫자 금지. 단정 금지.").strip()
-        if closing:
-            sections.append(ScriptSection("closing", closing))
+        raw_close = llm(f"'{topic}' 쇼츠를 닫는 전망 한 문장. 숫자 금지. 단정 금지.").strip().strip("\"'“”")
+        if raw_close and _no_new_digits(raw_close, allowed):
+            sections.append(ScriptSection("closing", raw_close))
 
     return Script(sections=sections, citations=citations)

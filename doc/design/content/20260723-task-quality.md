@@ -13,9 +13,9 @@
     - [x] A1: agent `Evidence.relations` 부활 → `build_script` **`relation` 섹션**. **검증: "삼성전자와 SK하이닉스 경쟁 구도"·"SK하이닉스는 반도체 관련주"**(조사 자동). +내레이션에 relation 포함.
     - [x] A2: 사실 **중복 제거**(정규화 제목 dedup, 최신순 유지) → **검증: fact 3개 서로 다른 헤드라인**(이전 동일 반복 사라짐).
     - [x] A3: 엔티티 사전 6→20 + 섹터 + **단일 종목→섹터 엣지**(결정론) + **백필 309기사→섹터 엣지**. **검증: (현대차)-BELONGS_TO->(자동차) 등, 주요 종목 관계 커버.**
-  - **Phase B**
-    - [ ] B1: `fact`/`relation` 섹션이 **연결·해석 문장**(LLM)로 서술되되, 모든 수치·관계는 슬롯/근거에 결속(환각 0 — 인용 검증 유지).
-    - [ ] B2: 거시가 숫자 덤프 → **문장**("원달러 1,527원으로 부담" 식, 값은 슬롯).
+  - **Phase B** ✅ (구현·실 스택 검증)
+    - [x] B1: 훅이 **실제 뉴스에 근거**(LLM+citation guard) + 헤드라인 정리([태그]·말줄임 제거). **검증: "현대차 노사 대립 종식 필요, 생산차질 지속"·"현대차 노사, 대립의 시간 끝내야"**(이전 필러·[태그] 사라짐). 환각 수치 차단.
+    - [x] B2: 거시 숫자 덤프 → **문장**(2개 한정). **검증: "거시 환경도 함께 보면, … 수준입니다."**
   - **Phase C**
     - [ ] C1: `media.assemble`에 `segments`(구간 자막+음성) → **구간별 자막 싱크**·수치 구간 팝. 정적 1화면 탈피.
     - [ ] C2: **신뢰 배지**(출처·날짜) 화면 표시(무출처면 미표시).
@@ -95,5 +95,6 @@
 
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
+| 20260723 | /builder(Phase B) | 문장 품질(agent builder). **B1**: 훅 프롬프트를 실제 뉴스(제목+리드 사실) 기반으로 재작성(이전 "주식 쇼츠 도입" 필러 제거) + `_clean_fact`(헤드라인 [태그]·글머리표·말줄임 정리, LLM 미개입·사실 불변) + **citation guard `_no_new_digits`**(생성 문장의 환각 수치 차단, 위반 시 폴백). **B2**: `_macro_sentence`(거시 5덤프→2개 문장, 값=슬롯). 템플릿 hook 필드를 톤 지시로 축소. **검증(실 스택)**: 현대차 job#29 훅 "현대차 노사 대립 종식 필요, 생산차질 지속", fact "현대차 노사, 대립의 시간 끝내야"(정리됨), 거시 문장화; 승인→ready 회귀0; agent 단위테스트 3 통과. **이탈**: 근사 중복 헤드라인(다른 어휘)은 exact-dedup이 못 잡음(후속), 거시 지표명 단위 노이즈(CPI 기준연도) 잔존(후속). |
 | 20260723 | /builder(Phase A) | 알파 데이터 복원 구현·검증. **A1**: agent `Evidence.relations`+`gather` 파싱, `build_script(relations)`→`relation` 섹션(`EDGE_KO`→조사 자동 `_josa`), main.py가 relations 전달. **A1 gap 수정**: agent가 그래프 조회 entity를 티커코드→**종목명**으로(노드가 이름이라 매칭 안 되던 것). content `build_narration`에 `relation` 포함(음성에도). **A2**: research `/search` 사실 정규화 dedup(최신순). **A3**: `common.stocks` 20종목+섹터맵+`sector_of`, news-feed `tag_entity_names`가 종목+섹터 allow-list, research consumer 결정론적 종목→섹터 `BELONGS_TO` 엣지, `app/backfill.py`+`scripts/backfill-graph.sh`(과거 기사 백필). **검증(실 스택)**: 백필 309기사→404 연관; 삼성전자 시나리오에 경쟁·섹터 관계+조사 정확; fact 중복0; job#28→ready 회귀0; 단위테스트 news-feed 6·agent 3 통과. **이탈**: (1)그래프 엣지는 MERGE로 유니크화→카운트는 낮지만 종목별 커버리지 확보(근거=article), (2)백필은 결정론적 섹터엣지만(과거 LLM 재추출은 Ollama 부하로 후속), (3)사실 랭킹은 최신순+dedup(issue 점수 연계는 후속). |
 | 20260723 | /design | 품질 향상 통합 설계 — 알파 복원. **결정적 진단: agent Evidence에 relations 없어 그래프 인과가 영상에 0.** Phase A(관계 투입·사실 큐레이션·그래프 확대+백필) → B(LLM 연결자·거시 문장, 환각0 유지) → C(구간 장면·자막 싱크·신뢰 배지·TTS). 계약 `api-contract-quality.py`(mypy 통과). ADR 0012 제안. 구현은 Phase별 /run. |
