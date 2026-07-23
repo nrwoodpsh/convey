@@ -7,6 +7,7 @@ content는 잡 상태머신을 소유하고, 두 흐름을 소비한다:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -69,11 +70,21 @@ async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> Non
     template = str(event.get("template", "analysis"))  # 시나리오 템플릿(㉔)
     await _set_status(job_id, JobStatus.SCRIPTING)
 
-    try:
-        script_res = await _call_agent_script(job_id, topic, ticker, template)
-    except Exception as exc:  # noqa: BLE001 — 실패는 잡에 기록하고 계속(워커 생존)
-        await _set_status(job_id, JobStatus.FAILED, error=f"script: {exc}"[:500])
-        logger.exception("스크립트 생성 실패 job=%s", job_id)
+    # 스크립트 생성 — 일시 실패(LLM 타임아웃 등) 재시도(㉙/F1, 상한·백오프).
+    script_res = None
+    last_exc: Exception | None = None
+    for attempt in range(settings.retry_max + 1):
+        try:
+            script_res = await _call_agent_script(job_id, topic, ticker, template)
+            break
+        except Exception as exc:  # noqa: BLE001 — 재시도 후 최종 실패만 기록
+            last_exc = exc
+            logger.warning("스크립트 생성 실패(시도 %s) job=%s: %s", attempt + 1, job_id, exc)
+            if attempt < settings.retry_max:
+                await asyncio.sleep(settings.retry_backoff_sec)
+    if script_res is None:
+        await _set_status(job_id, JobStatus.FAILED, error=f"script: {last_exc}"[:500])
+        logger.exception("스크립트 생성 최종 실패 job=%s", job_id, exc_info=last_exc)
         return
 
     # Script 저장
@@ -112,12 +123,39 @@ async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> Non
     logger.info("media.assemble 발행 job=%s script=%s", job_id, script_id)
 
 
+async def _retry_assemble(job_id: int, producer: KafkaProducer, err: str) -> bool:
+    """합성 일시 실패 재시도(㉙/F1) — 상한 내면 chart+script로 media.assemble 재발행. 재발행하면 True."""
+    async with SessionLocal() as session:
+        job = await session.get(GenerationJob, job_id)
+        if job is None or not job.chart or job.retry_count >= settings.retry_max:
+            return False
+        job.retry_count += 1
+        job.status = JobStatus.ASSEMBLING.value
+        await session.commit()
+        script = await repository.get_script_by_job(session, job_id)
+        sections = script.sections if script is not None else []
+        citations = script.citations if script is not None else []
+        n = job.retry_count
+        event_out = media.build_assemble_event(
+            job_id=job_id, topic=job.topic, ticker=job.ticker, chart=job.chart,
+            sections=sections, narration_max_chars=settings.narration_max_chars,
+            citations=citations, date=job.created_at.date().isoformat(),
+        )
+    await asyncio.sleep(settings.retry_backoff_sec)
+    await producer.publish(settings.topic_assemble, event_out, key=str(job_id))
+    logger.info("합성 재시도 %s/%s job=%s (이전 오류: %s)", n, settings.retry_max, job_id, err[:100])
+    return True
+
+
 async def handle_assembled(event: dict[str, Any], producer: KafkaProducer) -> None:
     """content.assembled(video-assembly 완료) → Content 저장 → status=ready."""
     job_id = int(event["job_id"])
     ok = bool(event.get("ok"))
     mp4_path = event.get("mp4_path")
     if not ok or not mp4_path:
+        # 합성 일시 실패 — 상한 내 재시도(㉙/F1, 멱등: 같은 job으로 media.assemble 재발행)
+        if await _retry_assemble(job_id, producer, str(event.get("error") or "")):
+            return
         await _set_status(job_id, JobStatus.FAILED, error=(str(event.get("error") or "합성 실패"))[:500])
         logger.warning("합성 실패 job=%s: %s", job_id, event.get("error"))
         return

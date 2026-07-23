@@ -76,6 +76,26 @@ async def get_content(session: AsyncSession, content_id: int) -> Content | None:
     return await session.get(Content, content_id)
 
 
+async def stats(session: AsyncSession, *, recent_failed: int = 5) -> tuple[dict[str, int], list[tuple[int, str, str]]]:
+    """모니터링(㉙/F3) — 상태별 잡 수 + 최근 실패(job_id, topic, error)."""
+    rows = (
+        await session.execute(
+            select(GenerationJob.status, func.count()).group_by(GenerationJob.status)
+        )
+    ).all()
+    by_status = {str(s): int(c) for (s, c) in rows}
+    failed = (
+        await session.execute(
+            select(GenerationJob.id, GenerationJob.topic, GenerationJob.error)
+            .where(GenerationJob.status == "failed")
+            .order_by(GenerationJob.created_at.desc())
+            .limit(recent_failed)
+        )
+    ).all()
+    recent = [(int(i), str(t), str(e or "")) for (i, t, e) in failed]
+    return by_status, recent
+
+
 async def get_script_by_job(session: AsyncSession, job_id: int) -> Script | None:
     """잡의 스크립트(시나리오) 조회 — 미리보기용. 최신 1건. 없으면 None."""
     stmt = (

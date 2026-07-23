@@ -12,6 +12,8 @@ class Settings(BaseAppSettings):
     topic_issue_selected: str = "issue.selected"
     dedup_window_days: int = 1  # 자동 양산 중복회피 창(같은 종목 재생성 억제)
     narration_max_chars: int = 280  # 내레이션(음성) 문자 예산 ≈30s(㉑). 자막·인용은 전체 유지
+    retry_max: int = 2  # 합성 일시 실패 재시도 상한(㉙/F1)
+    retry_backoff_sec: float = 8.0  # 재시도 전 대기(초)
     # 오케스트레이션(키 없는 경로, 라운드⑤): content ↔ video-assembly
     topic_assemble: str = "media.assemble"  # 발행 → video-assembly
     topic_assembled: str = "content.assembled"  # 구독 ← video-assembly (fan-in)

@@ -24,6 +24,8 @@ class GenerationJob(Base):
     owner_id: Mapped[str] = mapped_column(String(64))
     # 차트 근거(agent 산출) — 승인 게이트(㉓): scenario_ready 동안 보존했다가 승인 시 합성에 재사용
     chart: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # 합성 재시도 횟수(㉙/F1) — 일시 실패 시 상한 내 재발행(멱등)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     script_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     content_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error: Mapped[str | None] = mapped_column(String(500), nullable=True)

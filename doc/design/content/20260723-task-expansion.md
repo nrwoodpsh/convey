@@ -15,10 +15,10 @@
     - [x] E1: `scripts/gen-stocks.py`(pykrx, 마커 치환) 커밋 + `common/stocks.py` 종목 **20→46**·섹터 확대(정적). **검증: stock_name 한국전력·SK텔레콤·엔씨소프트.** (미래-날짜 env라 pykrx 라이브 생성은 실배포 시; 지금은 큐레이션 확대.)
     - [x] E2: market-feed symbols **3→16** + news-feed RSS **2→5**. **검증: feeds=5, research.ingested 329건.**
     - [x] E3: `event_hints`→종목 **HAS_EVENT** 엣지(research consumer) + 부분문자열 태깅 오탐 수정(SK/LG). backfill `--llm` 옵션. **검증: 그래프 관계 7→54(BELONGS_TO 24·AFFECTS 13·COMPETES 8·HAS_EVENT 5·SUPPLIES 4).**
-  - **Phase F (안정)**
-    - [ ] F1: 합성/스크립트 **일시 실패 재시도**(최대 2회·백오프). 영구 실패는 failed 유지.
-    - [ ] F2: **자동양산 실검증** — issue.selected → 승인 없이 ready(알파4 무정지). 실 스택 1건.
-    - [ ] F3: **모니터링** — `GET /ui/stats`(상태별 잡 수·최근 실패) + 대시보드 표시.
+  - **Phase F (안정)** ✅ (구현·검증)
+    - [x] F1: 스크립트 **인라인 재시도**(agent 호출 상한 2·백오프) + 합성 **재시도**(`GenerationJob.retry_count`, chart+script 재발행, 멱등). 영구 실패는 failed. **검증: retry_count 컬럼·기전 구현, 정상 흐름 무영향.**
+    - [x] F2: 자동양산 — issue.selected(기아 000270) → job#38 `scripting→assembling`(**scenario_ready·승인 없이 자동 진행**). ✅
+    - [x] F3: `GET /ui/stats`(상태별 수·최근 실패) + 대시보드 카드. **검증: by_status{ready 23·failed 9·…}·recent_failed 반환.**
 
 ## 2. 사각지대 & 핵심 결정 (수정 가능성 순)
 
@@ -84,6 +84,7 @@
 
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
+| 20260723 | /builder(Phase F) | 안정화 구현·검증(확장 프로그램 완결). **F1**: consumer `handle_generate` 스크립트 인라인 재시도(상한 2·백오프) + `_retry_assemble`(합성 실패 시 `GenerationJob.retry_count`<상한이면 chart+script로 media.assemble 재발행, 멱등)·`retry_count` 컬럼(alembic d2e3f4a50012). **F2**: 자동양산 검증 — issue.selected(000270)→job#38 scripting→assembling(승인 게이트 없이 자동). **F3**: `repository.stats`·`GET /ui/stats`(`UiStatsRes`)·대시보드 statsbar 카드. **검증(실 스택)**: retry_count 마이그레이션; /ui/stats by_status·recent_failed; 자동 job#38 무정지 진행. **이탈**: 재시도가 4xx(무티커 422 등 영구 실패)도 재시도(낭비)—5xx/timeout 한정은 후속; 재시도 시 배경 real 기본(anim 선택 유실). **확장 프로그램(D·E·F) 완결.** |
 | 20260723 | /builder(Phase E) | 데이터 확장 구현·검증. **E1**: `scripts/gen-stocks.py`(pykrx→common 마커 치환) 신설, `common/stocks.py` 종목 20→46·섹터 확대(미래-날짜 env로 pykrx 라이브 불가→큐레이션 확대, 스크립트는 실배포용). **E2**: market-feed symbols 3→16, news-feed feed_urls 2→5(매경·이데일리·서울경제). **E3**: research consumer가 `event_hints`로 종목→**HAS_EVENT** 결정론 엣지 + `_STOCK_NAMES_SET`; news-feed `_suppress_substrings`(SK/LG 부분문자열 오탐 수정); `backfill.py --llm/--limit`(과거 기사 LLM 관계추출). **검증(실 스택)**: stock_name 신규종목 3개; feeds=5·ingested 329; 그래프 관계 **7→54**(HAS_EVENT 포함); news-feed 테스트 6 통과(부분문자열 수정 반영). **이탈**: pykrx 라이브 생성은 미래-날짜 env로 불가→큐레이션 확대(스크립트 커밋), 결정론 HAS_EVENT는 기사 키워드 의존(희소, DART 공시로 증가), backfill --llm은 Ollama로 느림(백그라운드 무오류 실행). **F는 후속 /run.** |
 | 20260723 | /builder(Phase D) | 연출 구현·검증. content(media): `broll_queries`(대표+보조2) 이벤트에 추가. video-assembly: `broll.fetch_many`(복수 클립), `assemble.build_bg_cuts`(N클립 concat **하드 컷** — xfade는 stream_loop+trim에서 -22 오류로 대체), worker가 video 2+개면 배경 합성 후 build_short_video. 수치 팝은 ㉖ fade 유지. **검증(실 스택)**: job#37 배경 3클립(공장/스카이라인/추상) 하드컷, bgx 28.5s 유효, 4s 공장→26s 파란 추상 전환; 폴백(bgx 실패 시 단일 bg0) 동작 확인(job#36). va 단위테스트 3 통과. **이탈**: xfade→하드컷(견고성), 수치 scale 바운스 후속, 대용량 Pexels 클립(128MB)로 합성 ~84s(파일크기 상한 튜닝 후속). **E·F는 후속 /run.** |
 | 20260723 | /design | 확장 프로그램(C 제외) — D 연출(배경 컷/xfade+수치 scale 팝), E 데이터(오프라인 pykrx 종목 마스터·시세/RSS 확대·DART 사건화·과거 기사 LLM 백필), F 안정(합성 재시도·자동양산 검증·/ui/stats 모니터링). 배경 컷은 ㉖ 단일배경 결정을 대체(ADR 0013). 구현 Phase D→E→F. 계약 `api-contract-expansion.py`(mypy 통과). |

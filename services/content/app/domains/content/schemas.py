@@ -120,3 +120,10 @@ class ScriptView(BaseModel):
 
     sections: list[ScriptSectionView] = Field(default_factory=list)
     citations: list[ScriptCiteView] = Field(default_factory=list)
+
+
+class UiStatsRes(BaseModel):
+    """대시보드 모니터링(㉙/F3) — 상태별 잡 수 + 최근 실패."""
+
+    by_status: dict[str, int] = Field(default_factory=dict)
+    recent_failed: list[dict[str, str]] = Field(default_factory=list)  # {job_id, topic, error}

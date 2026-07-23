@@ -43,6 +43,7 @@ from app.domains.content.schemas import (
     ScriptEditReq,
     ScriptSectionView,
     ScriptView,
+    UiStatsRes,
 )
 
 router = APIRouter(tags=["dashboard"])
@@ -119,6 +120,18 @@ async def ui_generate(
         session, producer, req, owner_id="dashboard", auto=False, template=payload.template
     )
     return {"job_id": job_id}
+
+
+@router.get("/ui/stats", response_model=UiStatsRes)
+async def ui_stats(session: AsyncSession = Depends(get_session)) -> UiStatsRes:
+    """모니터링(㉙/F3) — 상태별 잡 수 + 최근 실패."""
+    by_status, recent = await repository.stats(session)
+    return UiStatsRes(
+        by_status=by_status,
+        recent_failed=[
+            {"job_id": str(i), "topic": t, "error": e} for (i, t, e) in recent
+        ],
+    )
 
 
 @router.get("/ui/jobs", response_model=JobListRes)

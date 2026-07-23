@@ -124,6 +124,9 @@
   .badge.done{color:var(--lime)} .badge.run{color:var(--gold);animation:pulse 1.2s infinite} .badge.fail{color:#e06a78} .badge.wait{color:var(--gold)}
   @keyframes pulse{50%{opacity:.4}}
   .empty,.loading{color:var(--mut);font-size:13px;padding:12px 0}
+  .statsbar{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;color:var(--mut)}
+  .statsbar .kv{color:var(--ink)} .statsbar .kv b{color:var(--gold)}
+  .statsbar .fail{color:#e06a78} .statsbar .fail b{color:#e06a78}
   .hidden{display:none!important}
   #toast{position:fixed;right:20px;bottom:20px;z-index:20;display:flex;flex-direction:column;gap:8px}
   .t{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--gold);color:var(--ink);
@@ -210,6 +213,7 @@
     </section>
     <section class="panel">
       <h2>내 쇼츠</h2>
+      <div id="stats" class="statsbar"></div>
       <div class="filt" id="filt">
         <button class="f on" data-f="done">완료 <span id="n-done">0</span></button>
         <button class="f" data-f="fail">실패 <span id="n-fail">0</span></button>
@@ -370,9 +374,19 @@ async function playInto(vSel,mSel,cid,title,name){
 
 // ── 탭2: 잡 카드 ──
 function matches(it){if(filter==="all")return true;if(filter==="fail")return it.status==="failed";return DONE.has(it.status);}
+async function loadStats(){
+  try{
+    const r=await fetch("/ui/stats"); if(!r.ok) return;
+    const s=await r.json(); const bs=s.by_status||{};
+    const order=["ready","approved","assembling","scripting","scenario_ready","pending","failed"];
+    const kv=order.filter(k=>bs[k]).map(k=>`<span class="kv">${k} <b>${bs[k]}</b></span>`).join("");
+    const rf=(s.recent_failed||[]).slice(0,3).map(f=>esc(f.topic)).join(" · ");
+    const el=$("#stats"); if(el) el.innerHTML=kv+(rf?` <span class="fail">· 최근 실패: ${rf}</span>`:"");
+  }catch(e){}
+}
 async function loadJobs(){
   try{const r=await fetch("/ui/jobs?limit=200");if(!r.ok)throw 0;items=(await r.json()).items||[];}catch(e){return;}
-  renderJobs(); refreshWizard();
+  renderJobs(); refreshWizard(); loadStats();
   if(items.some(i=>RUNNING.has(i.status))||wz.job!=null) ensurePolling(); else stopPolling();
 }
 function ensurePolling(){if(!pollTimer)pollTimer=setInterval(loadJobs,2500);}
