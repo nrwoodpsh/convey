@@ -13,6 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domains.research.models import Article, MacroIndicator, PriceTick
 
 
+async def article_exists(session: AsyncSession, source_url: str) -> bool:
+    """수집 멱등(㉚) — 같은 source_url 기사가 이미 있으면 True(재저장·재NER skip)."""
+    row = (
+        await session.execute(
+            select(Article.id).where(Article.source_url == source_url).limit(1)
+        )
+    ).first()
+    return row is not None
+
+
 async def list_articles(
     session: AsyncSession, *, window_days: int, limit: int
 ) -> list[tuple[int, str, str, datetime, list[str]]]:

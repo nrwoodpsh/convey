@@ -7,18 +7,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from common.stocks import STOCK_NAMES
+
 from app.extract.relations import EDGE_TYPES
 
-# 종목명 → 티커. 이름이 이 사전에 있으면 노드에 :Stock 라벨 + ticker 속성(PriceTick 연계, 라운드⑲).
-# 전체 4타입(Event/Sector/Company) 분류는 후속. POC 소규모 사전(news-feed TICKER_DICT와 별개).
-_STOCK_BY_NAME: dict[str, str] = {
-    "삼성전자": "005930",
-    "SK하이닉스": "000660",
-    "현대차": "005380",
-    "LG에너지솔루션": "373220",
-    "네이버": "035420",
-    "카카오": "035720",
-}
+# 종목명 → 티커(공유 마스터, ㉚). 이름이 있으면 노드에 :Stock 라벨 + ticker 속성(PriceTick 연계).
+_STOCK_BY_NAME: dict[str, str] = {name: ticker for ticker, name in STOCK_NAMES.items()}
 
 
 class GraphRepo:
@@ -33,6 +27,15 @@ class GraphRepo:
         self._driver.execute_query(
             "MATCH (n:Entity {name: $n}) SET n:Stock, n.ticker = $t", n=name, t=ticker
         )
+
+    def upsert_entity(self, name: str, *, source_article_id: int) -> None:
+        """단독 엔티티 노드 upsert(㉚ 개방형 NER) — 관계 없는 엔티티도 그래프에 등재. 근거 결속."""
+        self._driver.execute_query(
+            "MERGE (n:Entity {name: $n}) "
+            "SET n.source_article_id = coalesce(n.source_article_id, $aid)",
+            n=name, aid=source_article_id,
+        )
+        self._label_stock(name)
 
     def upsert_relation(
         self, subject: str, edge: str, obj: str, *, source_article_id: int

@@ -22,7 +22,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.db import SessionLocal
 from app.domains.research.models import Article
-from app.extract.relations import extract_relations
+from app.extract.relations import extract_graph
 from app.graph.neo4j_repo import GraphRepo
 
 logging.basicConfig(level=logging.INFO)
@@ -67,18 +67,18 @@ async def run(*, use_llm: bool, limit: int) -> None:
             if name and sector:
                 graph.upsert_relation(name, "BELONGS_TO", sector, source_article_id=int(aid))
                 sector_edges += 1
-        # LLM: 본문 엔티티(2+) 관계추출
+        # LLM: 개방형 NER(엔티티+관계, ㉚) — 사전 seed 합집, 본문 substring 검증은 extract_graph 내부
         if llm is not None and body:
-            ents = [n for n in ENTITY_NAMES if n in body]
-            if len(ents) >= 2:
-                try:
-                    for r in extract_relations(body, ents, llm):
-                        graph.upsert_relation(
-                            r.subject, r.edge, r.object, source_article_id=int(aid)
-                        )
-                        rel_edges += 1
-                except Exception:  # noqa: BLE001 — 개별 기사 실패는 건너뜀(재개 가능)
-                    logger.exception("관계추출 실패 article=%s", aid)
+            seed = [n for n in ENTITY_NAMES if n in body]
+            try:
+                g = extract_graph(body, seed, llm)
+                for ent in g.entities:
+                    graph.upsert_entity(ent, source_article_id=int(aid))
+                for r in g.relations:
+                    graph.upsert_relation(r.subject, r.edge, r.object, source_article_id=int(aid))
+                    rel_edges += 1
+            except Exception:  # noqa: BLE001 — 개별 기사 실패는 건너뜀(재개 가능)
+                logger.exception("개방형 추출 실패 article=%s", aid)
     logger.info(
         "백필 완료: 기사 %s건 · 섹터엣지 %s · 관계엣지 %s (llm=%s)",
         len(rows), sector_edges, rel_edges, use_llm,

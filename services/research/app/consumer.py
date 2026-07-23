@@ -25,8 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import SessionLocal
 from app.domains.research.models import Article
-from app.domains.research.repository import upsert_macro, upsert_price_tick
-from app.extract.relations import extract_relations
+from app.domains.research.repository import article_exists, upsert_macro, upsert_price_tick
+from app.extract.relations import extract_graph
 from app.graph.neo4j_repo import GraphRepo
 
 logger = logging.getLogger("research.consumer")
@@ -40,10 +40,15 @@ async def handle_ingested(
     graph: GraphRepo,
     llm: Callable[[str], str],
 ) -> tuple[int, int]:
-    """research.ingested 1건 처리 → (article_id, 생성된 관계 수).
+    """research.ingested 1건 처리 → (article_id, 생성된 엣지 수).
 
-    1) Article 저장(출처·라이선스 필수)  2) 허용 엔티티로 LLM 관계추출  3) 그래프 upsert(근거=article.id)
+    멱등(㉚): 같은 source_url 재수신이면 skip(재저장·재NER 안 함 — 폴링 중복·Ollama 낭비 방지).
+    신규: Article 저장 → 개방형 NER(엔티티+관계 1콜) → 엔티티 노드·관계 upsert(근거=article.id).
     """
+    source_url = event["source_url"]
+    if await article_exists(session, source_url):
+        return -1, 0  # 이미 처리한 기사 — skip
+
     published = event.get("published_at")
     published_at = (
         datetime.fromisoformat(published) if isinstance(published, str) else datetime.now()
@@ -51,7 +56,7 @@ async def handle_ingested(
     article = Article(
         title=event["title"],
         body=event["body"],
-        source_url=event["source_url"],
+        source_url=source_url,
         license=event["license"],
         published_at=published_at,
         lang=event.get("lang", "ko"),
@@ -61,18 +66,17 @@ async def handle_ingested(
     await session.commit()
     await session.refresh(article)
 
-    # 동기 LLM 관계추출 + Neo4j upsert는 이벤트 루프를 막지 않게 스레드로 오프로드
-    # (HTTP /search가 소비 중에도 굶지 않도록 — 전체 기동 검증에서 발견한 블로킹 해소)
+    # 개방형 NER(㉚) — 엔티티+관계 1콜. 사전 엔티티(seed) 합집. 동기 LLM은 스레드로 오프로드.
     entities = event.get("entities", [])
-    if entities:
-        relations = await asyncio.to_thread(extract_relations, event["body"], entities, llm)
-        for rel in relations:
-            await asyncio.to_thread(
-                graph.upsert_relation, rel.subject, rel.edge, rel.object,
-                source_article_id=article.id,
-            )
-    else:
-        relations = []
+    g = await asyncio.to_thread(extract_graph, event["body"], entities, llm)
+    for ent in g.entities:
+        await asyncio.to_thread(graph.upsert_entity, ent, source_article_id=article.id)
+    for rel in g.relations:
+        await asyncio.to_thread(
+            graph.upsert_relation, rel.subject, rel.edge, rel.object,
+            source_article_id=article.id,
+        )
+    relations = g.relations
 
     # 결정론적 그래프 엣지(LLM 미개입·근거=article):
     #  - 종목→섹터 BELONGS_TO (㉕/A3)  - 종목→사건 HAS_EVENT (㉙/E3, DART 공시 등 event_hints)
