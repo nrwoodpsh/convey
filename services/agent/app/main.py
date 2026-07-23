@@ -9,6 +9,7 @@ from common.errors import AppError, register_exception_handlers
 from common.gateway_auth import make_gateway_dep
 from common.logging import configure_logging
 from common.security import H_SIGNATURE, H_TIMESTAMP, H_USER_ID, UserContext, sign_internal
+from common.stocks import stock_name
 from fastapi import Depends, FastAPI
 from pydantic import BaseModel, Field
 
@@ -115,14 +116,18 @@ class ScriptRes(BaseModel):
 
 @app.post("/agent/script", response_model=ScriptRes)
 async def agent_script(req: ScriptReq, user: UserContext = Depends(gateway_user)) -> ScriptRes:
-    """근거 스크립트 생성 — research /search로 근거 회수 → 템플릿+사실슬롯(수치=사실만)."""
-    ev = await app.state.retriever.gather(req.topic, ticker=req.ticker, entity=req.ticker)
+    """근거 스크립트 생성 — research /search로 근거 회수 → 템플릿+사실슬롯(수치=사실만).
+
+    그래프 노드는 종목 '이름'(현대차)이라 entity를 이름으로 넘겨야 관계가 매칭된다(㉕/A1).
+    """
+    entity = stock_name(req.ticker) or req.ticker
+    ev = await app.state.retriever.gather(req.topic, ticker=req.ticker, entity=entity)
     if ev.price is None:
         raise AppError("AGENT001", "가격 근거가 없어 스크립트를 만들 수 없습니다.", status=422)
     llm = _sync_llm(settings.gateway_internal_secret, settings.llm_inference_url)
     # build_script + 그 안의 동기 LLM 호출을 스레드로 격리(이벤트루프 비블로킹)
     script = await asyncio.to_thread(
-        build_script, req.topic, ev.price, ev.facts, llm, ev.macros, req.template
+        build_script, req.topic, ev.price, ev.facts, llm, ev.macros, req.template, ev.relations
     )
     chart = ChartOut(
         ticker=ev.price["ticker"], close=ev.price["close"],

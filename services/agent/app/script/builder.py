@@ -34,6 +34,42 @@ class MacroEvidence(TypedDict):
     ref_id: int
 
 
+class RelationEvidence(TypedDict):
+    """그래프 인과 근거(㉕/알파) — research /search relations. 근거=article_id(→source_url)."""
+
+    subject: str
+    edge: str
+    object: str
+    source_url: str
+    article_id: int
+
+
+def _josa(word: str, with_batchim: str, without: str) -> str:
+    """한국어 조사 선택 — 끝 글자 받침 유무. 비한글 끝(영문·숫자)은 무받침형."""
+    if not word:
+        return without
+    last = word[-1]
+    if "가" <= last <= "힣":
+        return with_batchim if (ord(last) - 0xAC00) % 28 != 0 else without
+    return without
+
+
+def _relation_sentence(rel: RelationEvidence) -> str:
+    """그래프 관계 근거 → 한국어 문장(사실 관계의 한국어화, 수치·창작 아님). 조사 자동."""
+    s, o, edge = rel["subject"], rel["object"], rel["edge"]
+    if edge == "AFFECTS":
+        return f"{s}{_josa(s, '이', '가')} {o}에 영향"
+    if edge == "SUPPLIES":
+        return f"{s}{_josa(s, '이', '가')} {o}에 공급"
+    if edge == "COMPETES":
+        return f"{s}{_josa(s, '과', '와')} {o} 경쟁 구도"
+    if edge == "BELONGS_TO":
+        return f"{s}{_josa(s, '은', '는')} {o} 관련주"
+    if edge == "HAS_EVENT":
+        return f"{s}에 {o} 이슈"
+    return f"{s}–{o}"
+
+
 @dataclass
 class Citation:
     claim: str
@@ -57,11 +93,11 @@ class Script:
 # 시나리오 템플릿(구성·톤 3종, ㉔) — 기사 선택 후 사용자가 고름.
 # 사용 사실 개수·거시 포함·마무리(closing) 여부·훅 문체를 달리한다. 기본 analysis(회귀 0).
 _TEMPLATES: dict[str, dict[str, object]] = {
-    "breaking": {"facts": 1, "macro": False, "closing": False,
+    "breaking": {"facts": 1, "relations": 1, "macro": False, "closing": False,
                  "hook": "속보처럼 급박하게 한 문장. 숫자 금지."},
-    "analysis": {"facts": 3, "macro": True, "closing": False,
+    "analysis": {"facts": 3, "relations": 2, "macro": True, "closing": False,
                  "hook": "주식 쇼츠 도입 문장 1개. 숫자·수치는 쓰지 말 것. 한 문장."},
-    "story": {"facts": 2, "macro": True, "closing": True,
+    "story": {"facts": 2, "relations": 1, "macro": True, "closing": True,
               "hook": "이야기를 여는 도입 문장 1개. 숫자 금지. 한 문장."},
 }
 
@@ -73,18 +109,23 @@ def build_script(
     llm: Callable[[str], str],
     macros: list[MacroEvidence] | None = None,
     template: str = "analysis",
+    relations: list[RelationEvidence] | None = None,
 ) -> Script:
-    """근거 스크립트 생성 — 수치는 price·macro 슬롯에서만, 연결 문장만 LLM. 모든 항목 출처 결속.
+    """근거 스크립트 생성 — 수치는 price·macro 슬롯, 관계는 그래프(근거), 연결 문장만 LLM.
 
-    template(㉔): breaking(속보·짧게) / analysis(분석·기본, 회귀 0) / story(도입-전개-마무리).
-    macros(거시 맥락)는 선택 — 비면 기존과 동일. 거시 수치도 슬롯에서만(환각 차단).
+    template(㉔): breaking / analysis(기본) / story. relations(㉕/알파): 그래프 인과 →
+    'relation' 섹션(예 "삼성전자과(와) SK하이닉스가 경쟁 구도"). 근거=article_id(무출처 폐기).
     """
     macros = macros or []
+    relations = relations or []
     tpl = _TEMPLATES.get(template, _TEMPLATES["analysis"])
     n_facts = int(tpl["facts"])  # type: ignore[call-overload]
+    n_rels = int(tpl.get("relations", 0))  # type: ignore[call-overload]
     use_macro = bool(tpl["macro"])
     use_closing = bool(tpl["closing"])
     used_facts = facts[:n_facts]
+    # 근거(출처) 있는 관계만, 종목 관련 우선(subject/object에 종목명 포함)
+    valid_rels = [r for r in relations if r.get("source_url")][:n_rels]
 
     ticker = price["ticker"]
     close = str(price["close"])
@@ -105,10 +146,13 @@ def build_script(
             {"ticker": ticker, "close": close, "change_pct": change},
         ),
     ]
+    # 관계(인과) 섹션 — 그래프 근거(알파). 수치 없음, 사실 관계만.
+    sections.extend(ScriptSection("relation", _relation_sentence(rel)) for rel in valid_rels)
     sections.extend(ScriptSection("fact", fact["text"]) for fact in used_facts)
 
     citations = [
         Citation(f"{ticker} 종가 {close}원 / 등락률 {change}%", price["source_url"], price["ref_id"]),
+        *[Citation(_relation_sentence(r), r["source_url"], r["article_id"]) for r in valid_rels],
         *[Citation(fact["text"], fact["source_url"], fact["ref_id"]) for fact in used_facts],
     ]
 

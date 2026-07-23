@@ -5,15 +5,10 @@
 """
 from __future__ import annotations
 
-# POC 종목 사전 (이름/별칭 → ticker). 운영에선 KRX 전체를 로드.
-TICKER_DICT: dict[str, str] = {
-    "삼성전자": "005930",
-    "SK하이닉스": "000660",
-    "현대차": "005380",
-    "LG에너지솔루션": "373220",
-    "네이버": "035420",
-    "카카오": "035720",
-}
+from common.stocks import ENTITY_NAMES, STOCK_NAMES
+
+# POC 종목 사전 (이름 → ticker) — 공유 소스(common.stocks) 확대분(㉕/A3). 운영에선 KRX 전체.
+TICKER_DICT: dict[str, str] = {name: ticker for ticker, name in STOCK_NAMES.items()}
 
 # 사건 후보 키워드 (label → 트리거 단어들)
 EVENT_KEYWORDS: dict[str, tuple[str, ...]] = {
@@ -33,10 +28,13 @@ def tag_tickers(text: str, dictionary: dict[str, str] | None = None) -> list[str
     return tagged
 
 
-def tag_entity_names(text: str, dictionary: dict[str, str] | None = None) -> list[str]:
-    """본문에 등장하는 사전 엔티티 **이름** 목록(관계추출 allowed용). 사전 밖은 포함 안 함."""
-    d = dictionary or TICKER_DICT
-    return [name for name in d if name in text]
+def tag_entity_names(text: str, names: tuple[str, ...] | None = None) -> list[str]:
+    """본문에 등장하는 사전 엔티티 **이름** 목록(관계추출 allowed용) — 종목 + 섹터(㉕/A3).
+
+    사전 밖은 포함 안 함(환각 방지). 등장 순서는 사전 순서.
+    """
+    allow = names or ENTITY_NAMES
+    return [name for name in allow if name in text]
 
 
 def tag_event_hints(text: str) -> list[str]:

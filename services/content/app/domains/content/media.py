@@ -45,7 +45,8 @@ def build_narration(sections: list[dict[str, Any]], max_chars: int) -> str:
     자막·인용(Script)은 전체 유지, 음성만 간결(쇼츠 길이). chart 슬롯은 사실값 해소.
     """
     parts: list[str] = []
-    for kind in ("hook", "chart", "fact", "macro"):
+    # relation(그래프 인과) 포함 — 알파가 음성에도 들리게(㉕). 순서: 훅→수치→인과→사실→거시.
+    for kind in ("hook", "chart", "relation", "fact", "macro"):
         sec = next((s for s in sections if s.get("kind") == kind), None)
         if sec is None:
             continue

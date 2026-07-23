@@ -18,6 +18,7 @@ from typing import Any
 import httpx
 from common.kafka import consume_forever
 from common.security import H_SIGNATURE, H_TIMESTAMP, H_USER_ID, sign_internal
+from common.stocks import sector_of
 from neo4j import GraphDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,8 +72,22 @@ async def handle_ingested(
     else:
         relations = []
 
-    logger.info("research.ingested 처리: article=%s relations=%s", article.id, len(relations))
-    return article.id, len(relations)
+    # 단일 종목 기사도 그래프에 남도록 결정론적 종목→섹터 엣지(㉕/A3, LLM 미개입·근거=article).
+    sector_edges = 0
+    for ent in entities:
+        sector = sector_of(str(ent))
+        if sector:
+            await asyncio.to_thread(
+                graph.upsert_relation, str(ent), "BELONGS_TO", sector,
+                source_article_id=article.id,
+            )
+            sector_edges += 1
+
+    logger.info(
+        "research.ingested 처리: article=%s relations=%s sector_edges=%s",
+        article.id, len(relations), sector_edges,
+    )
+    return article.id, len(relations) + sector_edges
 
 
 async def handle_tick(event: dict[str, Any], session: AsyncSession) -> tuple[int, bool]:

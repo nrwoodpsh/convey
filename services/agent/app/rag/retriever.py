@@ -11,17 +11,23 @@ from dataclasses import dataclass, field
 import httpx
 from common.security import H_SIGNATURE, H_TIMESTAMP, H_USER_ID, sign_internal
 
-from app.script.builder import FactEvidence, MacroEvidence, PriceEvidence
+from app.script.builder import (
+    FactEvidence,
+    MacroEvidence,
+    PriceEvidence,
+    RelationEvidence,
+)
 
 
 @dataclass
 class Evidence:
-    """스크립트 빌더 입력 — 가격 근거(수치 슬롯) + 시계열(차트) + 사실(인용) + 거시 맥락."""
+    """스크립트 빌더 입력 — 가격(수치 슬롯) + 시계열(차트) + 사실(인용) + 거시 + **그래프 관계(인과)**."""
 
     price: PriceEvidence | None
     series: list[float] = field(default_factory=list)
     facts: list[FactEvidence] = field(default_factory=list)
     macros: list[MacroEvidence] = field(default_factory=list)
+    relations: list[RelationEvidence] = field(default_factory=list)
 
 
 class Retriever:
@@ -75,7 +81,18 @@ class Retriever:
             for m in data.get("macros", [])
             if m.get("source_url")  # 가드레일: 무출처 제외
         ]
-        return Evidence(price=price, series=series, facts=facts, macros=macros)
+        # 그래프 관계(인과) — 알파. /search가 주는 relations를 버리지 않고 스크립트로(㉕).
+        relations: list[RelationEvidence] = [
+            {
+                "subject": str(r["subject"]), "edge": str(r["edge"]), "object": str(r["object"]),
+                "source_url": str(r["source_url"]), "article_id": int(r["source_article_id"]),
+            }
+            for r in data.get("relations", [])
+            if r.get("source_url")  # 가드레일: 무출처 관계 제외
+        ]
+        return Evidence(
+            price=price, series=series, facts=facts, macros=macros, relations=relations
+        )
 
     async def search(self, query: str) -> str:
         """/chat 에이전트 루프용 텍스트 컨텍스트 — 사실을 한 문자열로. (스크립트는 gather 사용)."""
