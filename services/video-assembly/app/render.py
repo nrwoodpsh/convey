@@ -23,6 +23,14 @@ if os.path.exists(FONT_PATH):
     plt.rcParams["font.family"] = font_manager.FontProperties(fname=FONT_PATH).get_name()
 plt.rcParams["axes.unicode_minus"] = False  # 음수 부호 깨짐 방지
 
+_GOLD = "#e9b44c"  # 브랜드 금색(㉖) — 종목 라벨·강조
+_TITLE_BOX = {"boxstyle": "round,pad=0.5", "facecolor": "black", "alpha": 0.6, "edgecolor": "none"}
+_NUM_BOX = {"boxstyle": "round,pad=0.4", "facecolor": "black", "alpha": 0.6, "edgecolor": "none"}
+
+
+def _num_color(change_pct: float) -> str:
+    return "#ff5252" if change_pct >= 0 else "#448aff"
+
 
 @dataclass
 class ChartOverlay:
@@ -69,9 +77,9 @@ def render_chart(overlay: ChartOverlay, out_path: str) -> str:
     if overlay.title:
         fig.text(0.5, 0.925, overlay.title, ha="center", va="center",
                  fontsize=44, color="white", weight="bold", bbox=title_box, wrap=True)
-    # 그 아래: 종목 라벨 '한글명(코드)' (청록 강조)
+    # 그 아래: 종목 라벨 '한글명(코드)' (금색 강조 — 브랜드, ㉖)
     fig.text(0.5, 0.86, stock_text, ha="center", va="center",
-             fontsize=40, color="#22e0ff", weight="bold", bbox=title_box)
+             fontsize=40, color=_GOLD, weight="bold", bbox=title_box)
 
     # 중앙: 큰 라인차트(정확 시계열)
     ax = fig.add_axes((0.10, 0.42, 0.80, 0.34))
@@ -92,3 +100,70 @@ def render_chart(overlay: ChartOverlay, out_path: str) -> str:
     fig.savefig(out_path, transparent=True)
     plt.close(fig)
     return out_path
+
+
+def render_chart_base(overlay: ChartOverlay, out_path: str) -> str:
+    """차트 base(㉖) — 제목 + 종목 라벨(금색) + 라인차트. **수치 없음**(수치는 render_numbers로 분리)."""
+    color = _num_color(overlay.change_pct)
+    stock_text = overlay.stock_label or overlay.ticker
+    fig = plt.figure(figsize=(9, 16), dpi=120)
+    fig.patch.set_alpha(0.0)
+    if overlay.title:
+        fig.text(0.5, 0.925, overlay.title, ha="center", va="center",
+                 fontsize=44, color="white", weight="bold", bbox=_TITLE_BOX, wrap=True)
+    fig.text(0.5, 0.86, stock_text, ha="center", va="center",
+             fontsize=40, color=_GOLD, weight="bold", bbox=_TITLE_BOX)
+    ax = fig.add_axes((0.10, 0.42, 0.80, 0.34))
+    ax.axis("off")
+    ax.patch.set_alpha(0.35)
+    ax.set_facecolor("black")
+    if overlay.series:
+        ax.plot(overlay.series, linewidth=6, color=color)
+        ax.margins(x=0.02, y=0.15)
+    fig.savefig(out_path, transparent=True)
+    plt.close(fig)
+    return out_path
+
+
+def render_numbers(overlay: ChartOverlay, out_path: str) -> str:
+    """수치 오버레이(㉖) — 종가·등락률만(투명, base와 동일 위치). chart 구간에 fade-in 팝."""
+    close_text, change_text = format_price(overlay.close, overlay.change_pct)
+    color = _num_color(overlay.change_pct)
+    fig = plt.figure(figsize=(9, 16), dpi=120)
+    fig.patch.set_alpha(0.0)
+    fig.text(0.5, 0.345, close_text, ha="center", va="center",
+             fontsize=76, color=color, weight="bold", bbox=_NUM_BOX)
+    fig.text(0.5, 0.285, change_text, ha="center", va="center",
+             fontsize=46, color=color, weight="bold", bbox=_NUM_BOX)
+    fig.savefig(out_path, transparent=True)
+    plt.close(fig)
+    return out_path
+
+
+def _brand_card(out_path: str, lines: list[tuple[str, float, int, str]]) -> str:
+    """전면 브랜드 카드(㉖) — 다크 불투명 9:16. lines=[(text, y, fontsize, color)]."""
+    fig = plt.figure(figsize=(9, 16), dpi=120)
+    fig.patch.set_facecolor("#0c0c0e")
+    for text, y, size, color in lines:
+        fig.text(0.5, y, text, ha="center", va="center",
+                 fontsize=size, color=color, weight="bold", wrap=True)
+    fig.savefig(out_path, facecolor=fig.get_facecolor())
+    plt.close(fig)
+    return out_path
+
+
+def render_intro_card(title: str, stock_label: str, out_path: str) -> str:
+    """인트로 전면 카드(0.8s) — 제목 + 종목(금색) + CONVEY."""
+    return _brand_card(out_path, [
+        (title or "", 0.62, 52, "white"),
+        (stock_label or "", 0.50, 44, _GOLD),
+        ("CONVEY.", 0.36, 40, "#e11d34"),
+    ])
+
+
+def render_outro_card(subtitle: str, out_path: str) -> str:
+    """아웃트로 전면 카드(0.8s) — CONVEY + 출처·날짜."""
+    return _brand_card(out_path, [
+        ("CONVEY.", 0.56, 60, "#e11d34"),
+        (subtitle or "", 0.44, 32, _GOLD),
+    ])

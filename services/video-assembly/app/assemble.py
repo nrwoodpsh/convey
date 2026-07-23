@@ -1,7 +1,8 @@
-"""ffmpeg 합성 — 차트 오버레이(+배경 broll·음성) → 쇼츠 mp4. 라운드④.
+"""ffmpeg 합성 — 차트 오버레이(+배경 broll·음성·연출) → 쇼츠 mp4. 라운드④·㉕·㉖.
 
 정확한 차트·수치(render.py, 알파③)를 배경·음성과 합쳐 최종 mp4를 만든다.
-배경 broll·음성은 외부 API 산출(커모디티) — 여기선 로컬 ffmpeg 합성만.
+㉖ 연출(단일 배경 + 오버레이): 수치 팝(fade) · 구간 자막(금색 강조·싱크) · 신뢰 배지 ·
+인트로/아웃트로 전면 카드. 배경은 1개 유지(컷 전환 리스크 회피).
 """
 from __future__ import annotations
 
@@ -11,9 +12,12 @@ import subprocess
 # 자막 한글 폰트(번들 NanumGothic) — render.py와 동일 파일. 없으면 drawtext 기본(tofu 위험).
 _FONT = os.path.join(os.path.dirname(__file__), "assets", "NanumGothic.ttf")
 _FONTFILE = f"fontfile={_FONT}:" if os.path.exists(_FONT) else ""
+_GOLD = "#e9b44c"
+_INTRO = 0.8
+_OUTRO = 0.8
 
-# 구간 자막 = (텍스트, 시작초, 끝초)
-Caption = tuple[str, float, float]
+# 구간 자막 = (텍스트, 시작초, 끝초, 금색여부)
+Caption = tuple[str, float, float, bool]
 
 
 def _esc(s: str) -> str:
@@ -26,35 +30,86 @@ def _shorten(s: str, n: int = 30) -> str:
 
 
 def _drawtext(text: str, *, size: int, y: str, x: str = "(w-text_w)/2",
-              alpha: float = 0.5, enable: str = "") -> str:
+              alpha: float = 0.5, color: str = "white", enable: str = "") -> str:
     en = f":enable='{enable}'" if enable else ""
     return (
-        f"drawtext={_FONTFILE}text='{_esc(text)}':fontcolor=white:fontsize={size}:"
+        f"drawtext={_FONTFILE}text='{_esc(text)}':fontcolor={color}:fontsize={size}:"
         f"box=1:boxcolor=black@{alpha}:boxborderw=10:x={x}:y={y}{en}"
     )
 
 
-def _text_layer(
-    captions: list[Caption] | None, subtitle: str | None, badge: str | None
+def _run(
+    *,
+    bg_inputs: list[str],
+    bg_filter: str,
+    chart_png: str,
+    out_mp4: str,
+    duration: float,
+    fps: int,
+    audio_path: str | None,
+    numbers_png: str | None = None,
+    pop_start: float = 0.0,
+    intro_png: str | None = None,
+    outro_png: str | None = None,
+    captions: list[Caption] | None = None,
+    subtitle: str | None = None,
+    badge: str | None = None,
 ) -> str:
-    """자막(구간 싱크 or 단일 폴백) + 신뢰 배지 → drawtext 체인. 없으면 빈 문자열."""
+    """공용 합성 — 배경 위에 차트·수치(팝)·자막·배지·인트로/아웃트로를 순서대로 오버레이."""
+    inputs = list(bg_inputs)  # 입력0 = 배경
+    idx = 1
+
+    def add_img(path: str) -> int:
+        nonlocal idx
+        inputs.extend(["-loop", "1", "-i", path])
+        idx += 1
+        return idx - 1
+
+    ci = add_img(chart_png)
+    ni = add_img(numbers_png) if numbers_png else None
+    ii = add_img(intro_png) if intro_png else None
+    oi = add_img(outro_png) if outro_png else None
+    if audio_path:
+        inputs.extend(["-i", audio_path])
+    else:  # 무음(합성 검증·자리표시)
+        inputs.extend(["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"])
+    ai = idx
+
+    parts = [f"[0:v]{bg_filter}[bg]", f"[bg][{ci}:v]overlay=(W-w)/2:(H-h)/2[v]"]
+    # 수치 팝 — chart 구간에 fade-in 등장
+    if ni is not None:
+        parts.append(f"[{ni}:v]fade=t=in:st={pop_start:.2f}:d=0.4:alpha=1[num]")
+        parts.append(f"[v][num]overlay=(W-w)/2:(H-h)/2:enable='gte(t,{pop_start:.2f})'[v]")
+    # 자막(구간 싱크·금색 강조) + 신뢰 배지 — 인트로/아웃트로보다 먼저(카드가 덮도록)
     draws: list[str] = []
     if captions:
-        for text, start, end in captions:
+        for text, start, end, gold in captions:
             draws.append(_drawtext(
                 _shorten(text), size=44, y="h-240",
+                color=_GOLD if gold else "white",
                 enable=f"between(t,{start:.2f},{end:.2f})",
             ))
     elif subtitle:
         draws.append(_drawtext(_shorten(subtitle, 40), size=48, y="h-240"))
     if badge:
-        # 신뢰 배지 — 우상단, 작게·상시(정확 데이터 알파 체감)
-        draws.append(_drawtext(
-            _shorten(badge, 34), size=30, y="46", x="w-text_w-34", alpha=0.4,
-        ))
-    if not draws:
-        return ""
-    return ";[v]" + ",".join(draws) + "[v]"
+        draws.append(_drawtext(_shorten(badge, 34), size=30, y="46", x="w-text_w-34", alpha=0.4))
+    if draws:
+        parts.append("[v]" + ",".join(draws) + "[v]")
+    # 인트로/아웃트로 전면 카드(불투명) — enable 시간창으로 배경 위를 덮음
+    if ii is not None:
+        parts.append(f"[v][{ii}:v]overlay=0:0:enable='lt(t,{_INTRO})'[v]")
+    if oi is not None:
+        parts.append(f"[v][{oi}:v]overlay=0:0:enable='gt(t,{max(duration - _OUTRO, 0):.2f})'[v]")
+
+    cmd = [
+        "ffmpeg", "-y", *inputs,
+        "-filter_complex", ";".join(parts),
+        "-map", "[v]", "-map", f"{ai}:a",
+        "-t", str(duration), "-r", str(fps),
+        "-pix_fmt", "yuv420p", "-c:v", "libx264", "-c:a", "aac", "-shortest", out_mp4,
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)
+    return out_mp4
 
 
 def build_short(
@@ -68,30 +123,24 @@ def build_short(
     subtitle: str | None = None,
     captions: list[Caption] | None = None,
     badge: str | None = None,
+    numbers_png: str | None = None,
+    pop_start: float = 0.0,
+    intro_png: str | None = None,
+    outro_png: str | None = None,
 ) -> str:
-    """정지 이미지 → 쇼츠 영상. 켄번즈(zoompan) 모션 + 차트 오버레이 + (구간 자막·배지) + 오디오. 9:16.
-
-    생성형 영상 없이 이미지만으로 영상을 만든다(ADR 0006). 수치·차트는 chart_png(정확 렌더).
-    """
+    """정지 이미지 → 쇼츠. 켄번즈(zoompan) 모션 + 오버레이 연출(㉖). 9:16."""
     frames = int(duration * fps)
-    vf = (
-        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
-        f"zoompan=z='min(zoom+0.0004,1.15)':d={frames}:s=1080x1920:fps={fps},setsar=1[bg];"
-        "[bg][1:v]overlay=(W-w)/2:(H-h)/2[v]"
+    bg_filter = (
+        "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+        f"zoompan=z='min(zoom+0.0004,1.15)':d={frames}:s=1080x1920:fps={fps},setsar=1"
     )
-    vf += _text_layer(captions, subtitle, badge)
-    cmd = ["ffmpeg", "-y", "-loop", "1", "-i", image_path, "-loop", "1", "-i", chart_png]
-    if audio_path:
-        cmd += ["-i", audio_path]
-    else:  # 음성 없으면 무음 트랙(합성 검증·자리표시)
-        cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
-    cmd += [
-        "-filter_complex", vf, "-map", "[v]", "-map", "2:a",
-        "-t", str(duration), "-r", str(fps),
-        "-pix_fmt", "yuv420p", "-c:v", "libx264", "-c:a", "aac", "-shortest", out_mp4,
-    ]
-    subprocess.run(cmd, check=True, capture_output=True)
-    return out_mp4
+    return _run(
+        bg_inputs=["-loop", "1", "-i", image_path], bg_filter=bg_filter,
+        chart_png=chart_png, out_mp4=out_mp4, duration=duration, fps=fps,
+        audio_path=audio_path, numbers_png=numbers_png, pop_start=pop_start,
+        intro_png=intro_png, outro_png=outro_png,
+        captions=captions, subtitle=subtitle, badge=badge,
+    )
 
 
 def build_short_video(
@@ -105,48 +154,17 @@ def build_short_video(
     subtitle: str | None = None,
     captions: list[Caption] | None = None,
     badge: str | None = None,
+    numbers_png: str | None = None,
+    pop_start: float = 0.0,
+    intro_png: str | None = None,
+    outro_png: str | None = None,
 ) -> str:
-    """영상 배경(스톡 broll) → 쇼츠. 배경 9:16 크롭·반복 + 차트 오버레이 + (구간 자막·배지) + 오디오.
-
-    켄번즈 대신 배경 자체 모션 사용(B-2). chart_png는 투명 1080×1920(배경 노출).
-    """
-    vf = (
-        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[bg];"
-        "[bg][1:v]overlay=(W-w)/2:(H-h)/2[v]"
+    """영상 배경(스톡 broll) → 쇼츠. 배경 9:16 크롭·반복 + 오버레이 연출(㉖). 투명 차트."""
+    bg_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1"
+    return _run(
+        bg_inputs=["-stream_loop", "-1", "-i", video_path], bg_filter=bg_filter,
+        chart_png=chart_png, out_mp4=out_mp4, duration=duration, fps=fps,
+        audio_path=audio_path, numbers_png=numbers_png, pop_start=pop_start,
+        intro_png=intro_png, outro_png=outro_png,
+        captions=captions, subtitle=subtitle, badge=badge,
     )
-    vf += _text_layer(captions, subtitle, badge)
-    cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", video_path, "-loop", "1", "-i", chart_png]
-    if audio_path:
-        cmd += ["-i", audio_path]
-    else:
-        cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
-    cmd += [
-        "-filter_complex", vf, "-map", "[v]", "-map", "2:a",
-        "-t", str(duration), "-r", str(fps),
-        "-pix_fmt", "yuv420p", "-c:v", "libx264", "-c:a", "aac", "-shortest", out_mp4,
-    ]
-    subprocess.run(cmd, check=True, capture_output=True)
-    return out_mp4
-
-
-def compose(
-    chart_png: str,
-    out_mp4: str,
-    *,
-    duration: float = 5.0,
-    background: str | None = None,
-    audio: str | None = None,
-) -> str:
-    """차트 PNG를 9:16 쇼츠 mp4로 합성. 배경·음성 있으면 오버레이/믹스, 없으면 정지 차트."""
-    cmd: list[str] = ["ffmpeg", "-y"]
-    if background:
-        cmd += ["-i", background, "-loop", "1", "-i", chart_png]
-        filter_complex = "[0:v]scale=1080:1920[bg];[bg][1:v]overlay=(W-w)/2:(H-h)/2"
-        cmd += ["-filter_complex", filter_complex, "-t", str(duration)]
-    else:
-        cmd += ["-loop", "1", "-i", chart_png, "-t", str(duration), "-vf", "scale=1080:1920"]
-    if audio:
-        cmd += ["-i", audio, "-shortest"]
-    cmd += ["-pix_fmt", "yuv420p", out_mp4]
-    subprocess.run(cmd, check=True, capture_output=True)
-    return out_mp4

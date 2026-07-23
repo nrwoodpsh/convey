@@ -18,7 +18,16 @@ from common.stocks import stock_label
 from app.assemble import build_short, build_short_video
 from app.broll import PexelsClient
 from app.config import settings
-from app.render import ChartOverlay, render_chart, render_title_card
+from app.render import (
+    ChartOverlay,
+    render_chart_base,
+    render_intro_card,
+    render_numbers,
+    render_outro_card,
+    render_title_card,
+)
+
+_EMPHASIS_KINDS = ("chart", "relation")  # 금색 강조 구간(㉖)
 from app.tts import make_engine
 
 
@@ -40,13 +49,13 @@ _GAP = 0.35  # 구간 사이 무음(초) — 자연스러운 쉼
 
 def _segment_audio(
     segments: list[dict[str, Any]], base: str,
-) -> tuple[str | None, list[tuple[str, float, float]]]:
-    """구간별 TTS(㉕/C3) → 무음 연결 오디오 + 구간 타이밍(자막 싱크용).
+) -> tuple[str | None, list[tuple[str, str, float, float]]]:
+    """구간별 TTS(㉕/C3) → 무음 연결 오디오 + 구간 타이밍(kind,text,start,end).
 
     하나라도 합성 실패(무음 엔진·오프라인)면 (None, []) → 호출측이 단일 내레이션으로 폴백.
     """
     engine = make_engine()
-    parts: list[tuple[str, str, float]] = []  # (mp3, text, dur)
+    parts: list[tuple[str, str, str, float]] = []  # (mp3, kind, text, dur)
     for i, seg in enumerate(segments):
         text = str(seg.get("text", "")).strip()
         if not text:
@@ -54,7 +63,7 @@ def _segment_audio(
         mp3 = engine.synthesize(text, f"{base}-seg{i}")
         if not mp3:
             return None, []
-        parts.append((mp3, text, _audio_duration(mp3) or 0.0))
+        parts.append((mp3, str(seg.get("kind", "")), text, _audio_duration(mp3) or 0.0))
     if len(parts) < 2:
         return None, []
     try:
@@ -66,7 +75,7 @@ def _segment_audio(
         )
         listfile = f"{base}-concat.txt"
         lines: list[str] = []
-        for i, (mp3, _t, _d) in enumerate(parts):
+        for i, (mp3, _k, _t, _d) in enumerate(parts):
             lines.append(f"file '{mp3}'")
             if i < len(parts) - 1:
                 lines.append(f"file '{sil}'")
@@ -80,10 +89,10 @@ def _segment_audio(
         )
     except (subprocess.CalledProcessError, OSError):
         return None, []
-    caps: list[tuple[str, float, float]] = []
+    caps: list[tuple[str, str, float, float]] = []
     t = 0.0
-    for (_mp3, text, dur) in parts:
-        caps.append((text, t, t + dur))
+    for (_mp3, kind, text, dur) in parts:
+        caps.append((kind, text, t, t + dur))
         t += dur + _GAP
     return out, caps
 
@@ -109,31 +118,44 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
 
     os.makedirs(settings.media_dir, exist_ok=True)
     base = os.path.join(settings.media_dir, f"job-{job_id}")
-    chart_png, bg_png, out_mp4 = f"{base}-chart.png", f"{base}-bg.png", f"{base}.mp4"
+    chart_png, bg_png, out_mp4 = f"{base}-chartbase.png", f"{base}-bg.png", f"{base}.mp4"
+    numbers_png, intro_png, outro_png = f"{base}-numbers.png", f"{base}-intro.png", f"{base}-outro.png"
 
     broll_meta: dict[str, str] = {}
     try:
+        s_label = stock_label(str(chart["ticker"]))  # '현대차(005380)' — 코드만 X
         overlay = ChartOverlay(
             ticker=str(chart["ticker"]),
             close=float(chart["close"]),
             change_pct=float(chart["change_pct"]),
             series=[float(x) for x in chart.get("series", [])],
-            title=title,  # 최상단 제목(주제)
-            stock_label=stock_label(str(chart["ticker"])),  # '현대차(005380)' — 코드만 X
+            title=title,
+            stock_label=s_label,
         )
-        await asyncio.to_thread(render_chart, overlay, chart_png)  # 투명 오버레이
-        # 구간 TTS(㉕/C) — 구간별 합성→싱크 자막. 실패 시 단일 내레이션 폴백.
-        captions: list[tuple[str, float, float]] = []
+        # 연출(㉖): 차트 base(수치 없음) + 수치(팝) + 인트로/아웃트로 카드
+        await asyncio.to_thread(render_chart_base, overlay, chart_png)
+        await asyncio.to_thread(render_numbers, overlay, numbers_png)
+        await asyncio.to_thread(render_intro_card, title, s_label, intro_png)
+        badge_txt = None
+        if trust.get("source_host"):
+            badge_txt = f"출처 {trust['source_host']} · {trust['published_date']}"
+        await asyncio.to_thread(render_outro_card, badge_txt or "", outro_png)
+
+        # 구간 TTS(㉕/C) — 구간별 합성→싱크 자막(kind 보유). 실패 시 단일 내레이션 폴백.
+        raw_caps: list[tuple[str, str, float, float]] = []
         audio_path: str | None = None
         if segments:
-            audio_path, captions = await asyncio.to_thread(_segment_audio, segments, base)
+            audio_path, raw_caps = await asyncio.to_thread(_segment_audio, segments, base)
         if audio_path is None:  # 폴백: 단일 내레이션(구간 자막 없음)
             audio_path = await asyncio.to_thread(make_engine().synthesize, narration, f"{base}-tts")
-            captions = []
+            raw_caps = []
         if audio_path:
             audio_dur = _audio_duration(audio_path)
             if audio_dur:
                 duration = audio_dur
+        # 구간 자막(금색 강조) + 수치 팝 시점(chart 구간 start)
+        captions = [(text, s, e, kind in _EMPHASIS_KINDS) for (kind, text, s, e) in raw_caps]
+        pop_start = next((s for (kind, _t, s, _e) in raw_caps if kind == "chart"), 0.0)
         # 쇼츠 목표 길이(㉑): 음성이 짧아도 최소 확보, 1분 이내 상한. 짧으면 배경 지속.
         duration = min(max(duration, settings.min_duration), settings.max_duration)
         # broll 배경(Pexels) — video/photo, 실패 시 로컬 카드 폴백
@@ -147,24 +169,22 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
                 "broll_author": broll.author,
                 "broll_license": broll.license,
             }
-            if broll.kind == "video":
-                await asyncio.to_thread(
-                    build_short_video, broll.path, chart_png, out_mp4,
-                    duration=duration, audio_path=audio_path, subtitle=subtitle,
-                    captions=captions or None, badge=badge,
-                )
-            else:  # photo → 켄번즈
-                await asyncio.to_thread(
-                    build_short, broll.path, chart_png, out_mp4,
-                    duration=duration, audio_path=audio_path, subtitle=subtitle,
-                    captions=captions or None, badge=badge,
-                )
+            builder = build_short_video if broll.kind == "video" else build_short
+            await asyncio.to_thread(
+                builder, broll.path, chart_png, out_mp4,
+                duration=duration, audio_path=audio_path, subtitle=subtitle,
+                captions=captions or None, badge=badge,
+                numbers_png=numbers_png, pop_start=pop_start,
+                intro_png=intro_png, outro_png=outro_png,
+            )
         else:  # 폴백: 로컬 타이틀 카드(현행)
             await asyncio.to_thread(render_title_card, title, bg_png)
             await asyncio.to_thread(
                 build_short, bg_png, chart_png, out_mp4,
                 duration=duration, audio_path=audio_path, subtitle=subtitle,
                 captions=captions or None, badge=badge,
+                numbers_png=numbers_png, pop_start=pop_start,
+                intro_png=intro_png, outro_png=outro_png,
             )
     except Exception as exc:  # noqa: BLE001 — 실패도 회신(잡을 failed로)
         await producer.publish(
