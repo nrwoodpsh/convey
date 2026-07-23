@@ -101,3 +101,18 @@ class PexelsClient:
         if mode == "video":
             return self.video(query, f"{out_base}.mp4") or self.photo(query, f"{out_base}.jpg")
         return self.photo(query, f"{out_base}.jpg")
+
+    def fetch_many(self, queries: list[str], out_base: str, mode: str, n: int = 3) -> list[Broll]:
+        """여러 검색어 → 최대 n개 배경 클립(㉙/D — 컷 전환용). 실패 항목은 건너뜀."""
+        out: list[Broll] = []
+        seen: set[str] = set()
+        for i, q in enumerate(queries):
+            if len(out) >= n:
+                break
+            if not q.strip() or q in seen:
+                continue
+            seen.add(q)
+            b = self.fetch(q, f"{out_base}-bg{i}", mode)
+            if b is not None:
+                out.append(b)
+        return out

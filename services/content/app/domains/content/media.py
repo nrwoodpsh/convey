@@ -28,6 +28,22 @@ def broll_query(ticker: str | None, background: str = "real") -> str:
     return _BROLL_MAP.get(ticker or "", _BROLL_DEFAULT)
 
 
+# 배경 컷 전환용 보조 검색어(㉙/D) — 첫 개는 대표(산업/애니), 뒤는 다양성.
+_BG_EXTRA_REAL = ("seoul city skyline aerial", "abstract technology blue")
+_BG_EXTRA_ANIM = ("glowing particles blue", "digital data network abstract")
+
+
+def broll_queries(ticker: str | None, background: str = "real") -> list[str]:
+    """배경 컷 전환용 복수 검색어(㉙/D) — 대표 + 보조 2개. 중복 제거."""
+    primary = broll_query(ticker, background)
+    extra = _BG_EXTRA_ANIM if background == "anim" else _BG_EXTRA_REAL
+    out: list[str] = []
+    for q in (primary, *extra):
+        if q and q not in out:
+            out.append(q)
+    return out
+
+
 def clip(text: str, max_chars: int) -> str:
     """문자 예산 초과 시 문장/단어 경계에서 컷(음성이 중간에 안 끊기게)."""
     if len(text) <= max_chars:
@@ -101,6 +117,7 @@ def build_assemble_event(
         "narration": build_narration(sections, narration_max_chars),  # 폴백(구간 없을 때 단일 음성)
         "segments": segments,  # [{kind,text}] — 구간 TTS·싱크 자막
         "trust": build_trust(citations, date),
-        "broll_query": broll_query(ticker, background),
+        "broll_query": broll_query(ticker, background),  # 단일(폴백)
+        "broll_queries": broll_queries(ticker, background),  # 복수(㉙/D 컷 전환)
         "duration": 6.0,
     }

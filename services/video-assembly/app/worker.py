@@ -15,7 +15,7 @@ from common.kafka import KafkaProducer, consume_forever
 from common.logging import configure_logging
 from common.stocks import stock_label
 
-from app.assemble import build_short, build_short_video
+from app.assemble import build_bg_cuts, build_short, build_short_video
 from app.broll import PexelsClient
 from app.config import settings
 from app.render import (
@@ -26,9 +26,10 @@ from app.render import (
     render_outro_card,
     render_title_card,
 )
+from app.tts import make_engine, synthesize_batch
 
 _EMPHASIS_KINDS = ("chart", "relation")  # 금색 강조 구간(㉖)
-from app.tts import make_engine, synthesize_batch
+MAX_BG_CLIPS = 3  # 배경 컷 전환 최대 클립 수(㉙/D)
 
 
 def _audio_duration(path: str) -> float | None:
@@ -168,25 +169,38 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
         pop_start = next((s for (kind, _t, s, _e) in raw_caps if kind == "chart"), 0.0)
         # 쇼츠 목표 길이(㉑): 음성이 짧아도 최소 확보, 1분 이내 상한. 짧으면 배경 지속.
         duration = min(max(duration, settings.min_duration), settings.max_duration)
-        # broll 배경(Pexels) — video/photo, 실패 시 로컬 카드 폴백
-        broll = await asyncio.to_thread(
-            PexelsClient(settings.pexels_api_key).fetch,
-            broll_query, f"{base}-broll", settings.broll_mode,
+        # broll 배경(Pexels) — 복수 클립 하드 컷 전환(㉙/D), 실패 시 단일, 그래도 실패 시 로컬 카드
+        client = PexelsClient(settings.pexels_api_key)
+        queries = [str(q) for q in (event.get("broll_queries") or [broll_query]) if str(q).strip()]
+        brolls = await asyncio.to_thread(
+            client.fetch_many, queries, f"{base}-broll", settings.broll_mode, MAX_BG_CLIPS
         )
-        if broll is not None:
+        if brolls:
+            broll = brolls[0]
             broll_meta = {
                 "broll_source_url": broll.source_url,
                 "broll_author": broll.author,
                 "broll_license": broll.license,
             }
-            builder = build_short_video if broll.kind == "video" else build_short
-            await asyncio.to_thread(
-                builder, broll.path, chart_png, out_mp4,
+            # 배경 컷 전환: video 클립 2개 이상이면 하드 컷으로 배경 1개 합성
+            video_clips = [b.path for b in brolls if b.kind == "video"]
+            bg_video: str | None = None
+            if len(video_clips) >= 2:
+                bg_video = await asyncio.to_thread(
+                    build_bg_cuts, video_clips, f"{base}-bgx.mp4", duration=duration,
+                )
+            common = dict(
                 duration=duration, audio_path=audio_path, subtitle=subtitle,
                 captions=captions or None, badge=badge,
                 numbers_png=numbers_png, pop_start=pop_start,
                 intro_png=intro_png, outro_png=outro_png,
             )
+            if bg_video:  # xfade 컷 전환 배경
+                await asyncio.to_thread(build_short_video, bg_video, chart_png, out_mp4, **common)
+            elif broll.kind == "video":  # 단일 영상 배경(폴백)
+                await asyncio.to_thread(build_short_video, broll.path, chart_png, out_mp4, **common)
+            else:  # 사진 켄번즈
+                await asyncio.to_thread(build_short, broll.path, chart_png, out_mp4, **common)
         else:  # 폴백: 로컬 타이틀 카드(현행)
             await asyncio.to_thread(render_title_card, title, bg_png)
             await asyncio.to_thread(

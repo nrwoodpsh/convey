@@ -57,6 +57,39 @@ def _drawtext(text: str, *, size: int, y: str, x: str = "(w-text_w)/2",
     )
 
 
+def build_bg_cuts(clips: list[str], out_mp4: str, *, duration: float, fps: int = 30) -> str | None:
+    """N개 배경 영상 클립 → **하드 컷 전환** 배경 1개(㉙/D). 1080×1920·duration. 실패 시 None.
+
+    각 클립을 스트림 루프+크롭+동일 길이 트림 후 concat(하드 컷). 클립 2개 미만이면 None(단일 폴백).
+    (xfade는 stream_loop+trim 조합에서 -22 오류 → 견고한 concat 하드 컷 채택.)
+    """
+    n = len(clips)
+    if n < 2:
+        return None
+    seg = max(duration / n, 1.0)  # 클립당 길이(균등 분배)
+    inputs: list[str] = []
+    for c in clips:
+        inputs.extend(["-stream_loop", "-1", "-i", c])
+    parts: list[str] = []
+    for i in range(n):
+        parts.append(
+            f"[{i}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+            f"setsar=1,fps={fps},trim=0:{seg:.2f},setpts=PTS-STARTPTS[c{i}]"
+        )
+    labels = "".join(f"[c{i}]" for i in range(n))
+    parts.append(f"{labels}concat=n={n}:v=1:a=0[bg]")
+    cmd = [
+        "ffmpeg", "-y", *inputs, "-filter_complex", ";".join(parts),
+        "-map", "[bg]", "-t", str(duration), "-r", str(fps),
+        "-pix_fmt", "yuv420p", "-c:v", "libx264", "-an", out_mp4,
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    return out_mp4
+
+
 def _run(
     *,
     bg_inputs: list[str],
