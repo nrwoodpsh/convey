@@ -1,7 +1,7 @@
 """라운드① 관계추출 검증 — 환각 방지 필터가 핵심(알파1). LLM은 스텁으로 결정론 검증."""
 from __future__ import annotations
 
-from app.extract.relations import extract_graph, extract_relations
+from app.extract.relations import extract_article_graph, extract_graph, extract_relations
 
 
 def test_drops_out_of_scope_entity() -> None:
@@ -53,3 +53,51 @@ def test_extract_graph_substring_and_edge_filter() -> None:
     assert "시장" not in g.entities  # 스톱워드 → 폐기
     assert "삼성전자" in g.entities  # seed 합집
     assert len(g.relations) == 1 and g.relations[0].edge == "AFFECTS"  # FAKE 엣지 폐기
+
+
+# ── 요약 선행 NER(㉛) — 원문 검증으로 요약 환각 차단 ──
+def test_verify_text_drops_summary_hallucination() -> None:
+    """요약 위에서 NER하되 검증은 원문(verify_text) — 요약이 지어낸 엔티티는 폐기(알파1)."""
+    body = "삼성전자가 HBM을 공급한다."  # 원문
+    summary = "삼성전자가 젠슨황과 협력한다."  # 요약 — '젠슨황'은 원문에 없음(요약 환각)
+
+    def stub(_: str) -> str:
+        return '{"entities":["삼성전자","젠슨황"],"relations":[]}'
+
+    g = extract_graph(summary, ["삼성전자"], stub, verify_text=body)
+    assert "삼성전자" in g.entities  # seed
+    assert "젠슨황" not in g.entities  # 원문에 없음 → 폐기(요약 환각컷)
+
+
+def test_article_graph_long_uses_summary() -> None:
+    """긴 본문(>임계)은 요약 caller를 1회 호출하고 요약 위에서 NER."""
+    body = "가" * 1600  # > SUMMARY_THRESHOLD(1500)
+    calls = {"summary": 0}
+
+    def summary_llm(_: str) -> str:
+        calls["summary"] += 1
+        return "삼성전자 관련 요약"
+
+    def ner_llm(_: str) -> str:
+        return '{"entities":["삼성전자"],"relations":[]}'
+
+    g = extract_article_graph(body, ["삼성전자"], ner_llm, summary_llm)
+    assert calls["summary"] == 1  # 요약 호출됨
+    assert "삼성전자" in g.entities
+
+
+def test_article_graph_short_skips_summary() -> None:
+    """짧은 본문(≤임계)은 요약을 건너뛰고 원문 그대로 NER."""
+    body = "삼성전자가 상승했다."  # < 1500
+    calls = {"summary": 0}
+
+    def summary_llm(_: str) -> str:
+        calls["summary"] += 1
+        return "x"
+
+    def ner_llm(_: str) -> str:
+        return '{"entities":["삼성전자"],"relations":[]}'
+
+    g = extract_article_graph(body, ["삼성전자"], ner_llm, summary_llm)
+    assert calls["summary"] == 0  # 요약 미호출
+    assert "삼성전자" in g.entities

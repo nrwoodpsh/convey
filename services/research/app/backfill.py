@@ -1,7 +1,7 @@
 """그래프 백필(㉕/A3·㉙/E3) — 기존 articles에서 그래프 엣지를 재생성한다.
 
 기본(결정론): 종목→섹터 BELONGS_TO (Ollama 불필요·빠름).
---llm: 과거 기사 본문에 LLM 관계추출(extract_relations)까지 재실행(Ollama, 느림·재개 가능).
+--llm: 과거 기사에 개방형 NER 재실행(extract_article_graph — 긴 본문은 요약 선행, ㉛). Ollama, 재개 가능.
 근거=article.id(무출처 아님). 사람이 실행:
   docker compose exec research python -m app.backfill            # 결정론만
   docker compose exec research python -m app.backfill --llm --limit 50
@@ -22,21 +22,27 @@ from sqlalchemy import select
 from app.config import settings
 from app.db import SessionLocal
 from app.domains.research.models import Article
-from app.extract.relations import extract_graph
+from app.extract.relations import SUMMARY_NUM_PREDICT, extract_article_graph
 from app.graph.neo4j_repo import GraphRepo
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("research.backfill")
 
 
-def _llm_caller() -> Callable[[str], str]:
+def _llm_caller(num_predict: int | None = None) -> Callable[[str], str]:
+    """num_predict 지정 시 출력 상한 전달(㉛ 요약용). 미지정이면 기존과 동일."""
+
     def call(prompt: str) -> str:
         ts, sig = sign_internal(
             secret=settings.gateway_internal_secret, user_id="backfill", path="/generate"
         )
+        # think=False: 추론모델 <think> 억제(㉛). keep_alive: 모델 상주(재적재 방지).
+        payload: dict[str, object] = {"prompt": prompt, "think": False, "keep_alive": "30m"}
+        if num_predict is not None:
+            payload["num_predict"] = num_predict
         resp = httpx.post(
             f"{settings.llm_inference_url}/generate",
-            json={"prompt": prompt},
+            json=payload,
             headers={H_USER_ID: "backfill", H_TIMESTAMP: ts, H_SIGNATURE: sig},
             timeout=240,
         )
@@ -58,7 +64,9 @@ async def run(*, use_llm: bool, limit: int) -> None:
         rows = rows[:limit]
 
     sector_edges = rel_edges = 0
+    # 직렬·저부하 유지(병렬화 금지 — Ollama 포화 방지, ㉛). NER(무제한) + 요약(출력 상한).
     llm = _llm_caller() if use_llm else None
+    llm_summary = _llm_caller(SUMMARY_NUM_PREDICT) if use_llm else None
     for aid, body, tickers in rows:
         # 결정론: 종목→섹터
         for ticker in tickers or []:
@@ -67,11 +75,11 @@ async def run(*, use_llm: bool, limit: int) -> None:
             if name and sector:
                 graph.upsert_relation(name, "BELONGS_TO", sector, source_article_id=int(aid))
                 sector_edges += 1
-        # LLM: 개방형 NER(엔티티+관계, ㉚) — 사전 seed 합집, 본문 substring 검증은 extract_graph 내부
-        if llm is not None and body:
+        # LLM: 개방형 NER — 긴 본문은 요약 선행(㉛). 사전 seed 합집, 검증은 원문(extract_article_graph 내부).
+        if llm is not None and llm_summary is not None and body:
             seed = [n for n in ENTITY_NAMES if n in body]
             try:
-                g = extract_graph(body, seed, llm)
+                g = extract_article_graph(body, seed, llm, llm_summary)
                 for ent in g.entities:
                     graph.upsert_entity(ent, source_article_id=int(aid))
                 for r in g.relations:

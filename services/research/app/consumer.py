@@ -26,7 +26,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.domains.research.models import Article
 from app.domains.research.repository import article_exists, upsert_macro, upsert_price_tick
-from app.extract.relations import extract_graph
+from app.extract.relations import SUMMARY_NUM_PREDICT, extract_article_graph
 from app.graph.neo4j_repo import GraphRepo
 
 logger = logging.getLogger("research.consumer")
@@ -39,6 +39,7 @@ async def handle_ingested(
     session: AsyncSession,
     graph: GraphRepo,
     llm: Callable[[str], str],
+    llm_summary: Callable[[str], str],
 ) -> tuple[int, int]:
     """research.ingested 1건 처리 → (article_id, 생성된 엣지 수).
 
@@ -66,9 +67,11 @@ async def handle_ingested(
     await session.commit()
     await session.refresh(article)
 
-    # 개방형 NER(㉚) — 엔티티+관계 1콜. 사전 엔티티(seed) 합집. 동기 LLM은 스레드로 오프로드.
+    # 개방형 NER(㉚) — 엔티티+관계. 긴 본문은 요약 선행(㉛). 사전 seed 합집. 동기 LLM은 스레드로.
     entities = event.get("entities", [])
-    g = await asyncio.to_thread(extract_graph, event["body"], entities, llm)
+    g = await asyncio.to_thread(
+        extract_article_graph, event["body"], entities, llm, llm_summary
+    )
     for ent in g.entities:
         await asyncio.to_thread(graph.upsert_entity, ent, source_article_id=article.id)
     for rel in g.relations:
@@ -148,16 +151,24 @@ async def handle_macro(event: dict[str, Any], session: AsyncSession) -> tuple[in
     )
 
 
-def _llm_caller() -> Callable[[str], str]:
-    """관계추출용 LLM 호출 — llm-inference 경유(로컬 Ollama). 게이트웨이 HMAC 신뢰헤더 서명."""
+def _llm_caller(num_predict: int | None = None) -> Callable[[str], str]:
+    """LLM 호출 caller — llm-inference 경유(로컬 Ollama). 게이트웨이 HMAC 신뢰헤더 서명.
+
+    num_predict 지정 시 출력 상한 전달(㉛ 요약용). 미지정이면 기존과 동일(무제한).
+    """
 
     def call(prompt: str) -> str:
         ts, sig = sign_internal(
             secret=settings.gateway_internal_secret, user_id="research-consumer", path="/generate"
         )
+        # think=False: qwen3 등 추론모델의 <think> 억제(빈 요약·지연 방지, ㉛).
+        # keep_alive: 호출 사이 모델 상주(9.8GB 재적재 방지).
+        payload: dict[str, Any] = {"prompt": prompt, "think": False, "keep_alive": "30m"}
+        if num_predict is not None:
+            payload["num_predict"] = num_predict
         resp = httpx.post(
             f"{settings.llm_inference_url}/generate",
-            json={"prompt": prompt},
+            json=payload,
             headers={H_USER_ID: "research-consumer", H_TIMESTAMP: ts, H_SIGNATURE: sig},
             timeout=240,
         )
@@ -173,11 +184,12 @@ async def run_consumer() -> None:
     """
     user, _, pw = settings.neo4j_auth.partition("/")
     graph = GraphRepo(GraphDatabase.driver(settings.neo4j_url, auth=(user, pw)))
-    llm = _llm_caller()
+    llm = _llm_caller()  # NER(무제한)
+    llm_summary = _llm_caller(SUMMARY_NUM_PREDICT)  # 요약(출력 상한, ㉛)
 
     async def handler(event: dict[str, Any]) -> None:
         async with SessionLocal() as session:
-            await handle_ingested(event, session, graph, llm)
+            await handle_ingested(event, session, graph, llm, llm_summary)
 
     await consume_forever(
         topic=settings.topic_ingested,

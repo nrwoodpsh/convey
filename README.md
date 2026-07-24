@@ -59,7 +59,7 @@ convey/
 │  ├─ issue-detector/       # [워커] 이슈 종목 랭킹 → issue.selected(자동 양산) · 완료
 │  ├─ content/              # [API] 제작 잡·스크립트·미디어 자산·승인 + 운영 대시보드(:8091) · 완료
 │  ├─ agent/                # [API] 근거 스크립트(GraphRAG 2곳) → llm-inference · 완료
-│  ├─ llm-inference/        # [API] 로컬 Ollama 추론 창구(llama3.2)             · 완료
+│  ├─ llm-inference/        # [API] 로컬 Ollama 추론 창구(qwen3:14b, .env)       · 완료
 │  ├─ video-assembly/       # [워커] 차트·수치 렌더 + TTS(edge-tts)·broll(Pexels) + ffmpeg 합성 · 완료
 │  ├─ publishing/           # [API] YouTube 업로드·발행 승인                    · 스텁(C1 이연 — OAuth 키 대기)
 │  └─ sample-domain/        # [참고] 원형 패턴 예시(아웃박스·이벤트 발행)
@@ -103,8 +103,8 @@ curl http://localhost:8080/health          # 게이트웨이(유일한 외부 �
 # 운영 대시보드(로컬 무인증) — 1차의 주 조작 화면
 open http://localhost:8091                  # 오늘자 기사 → 시나리오 승인 → 배경 선택 → 쇼츠 생성·미리보기
 
-# Ollama 모델 준비(런타임 1회 — 이미지 미포함). 기본은 호스트 네이티브 Ollama 재사용.
-ollama pull llama3.2
+# Ollama 모델 준비(런타임 1회 — 이미지 미포함). 기본은 호스트 네이티브 Ollama 재사용(.env OLLAMA_MODEL).
+ollama pull qwen3:14b   # 추출·요약은 think=False로 호출(추론 억제·속도, ADR 0015)
 
 # 인증: 로그인·발급은 Supabase(클라이언트가 supabase-js/REST). 게이트웨이는 검증만.
 #   curl -H "Authorization: Bearer <supabase_access_token>" http://localhost:8080/research/search?q=...

@@ -33,6 +33,9 @@ register_exception_handlers(app)
 class GenerateReq(BaseModel):
     prompt: str
     model: str | None = None
+    num_predict: int | None = None  # 출력 토큰 상한(선택). 요약 등 짧은 생성 강제(㉛).
+    think: bool | None = None  # 추론 모델 <think> 억제(선택, ㉛).
+    keep_alive: str | None = None  # 모델 상주 시간(선택, 예 "30m") — 재적재 방지(㉛).
 
 
 class ChatReq(BaseModel):
@@ -47,7 +50,9 @@ async def health() -> dict[str, str]:
 
 @app.post("/generate")
 async def generate(req: GenerateReq, user: UserContext = Depends(gateway_user)) -> dict[str, str]:
-    text = await app.state.ollama.generate(req.prompt, req.model)
+    text = await app.state.ollama.generate(
+        req.prompt, req.model, req.num_predict, req.think, req.keep_alive
+    )
     return {"response": text}
 
 

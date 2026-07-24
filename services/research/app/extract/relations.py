@@ -71,6 +71,10 @@ ENTITY_STOPWORDS: frozenset[str] = frozenset({
 })
 ENTITY_MIN_LEN = 2
 
+# ── 요약 선행 NER(㉛, ADR 0015) ──
+SUMMARY_THRESHOLD = 1500  # 본문 char > 이 값이면 요약 선행. 이하는 원문 그대로 NER.
+SUMMARY_NUM_PREDICT = 256  # 요약 호출 출력 토큰 상한(호출 경계에서 바인딩) — 타임아웃 방지.
+
 
 @dataclass
 class Graph:
@@ -117,17 +121,24 @@ def _parse_graph(raw: str) -> tuple[list[str], list[Relation]]:
 
 
 def extract_graph(
-    text: str, seed_entities: list[str], llm: Callable[[str], str]
+    text: str,
+    seed_entities: list[str],
+    llm: Callable[[str], str],
+    *,
+    verify_text: str | None = None,
 ) -> Graph:
     """개방형 추출(㉚) — 엔티티+관계 1콜. 환각 통제: 본문 실재(substring)·정규화·스톱워드·엣지 제한.
 
     seed_entities(사전=고정확)는 검증 없이 신뢰(news-feed가 본문 매칭으로 뽑음). LLM 엔티티는 검증.
+    verify_text(㉛): NER 입력은 text, 환각 검증은 verify_text(없으면 text). 요약 경로에서
+    text=요약·verify_text=원문 → 엔티티는 원문 실재만 채택(요약 환각 폐기, 알파1 보존).
     """
+    verify = verify_text if verify_text is not None else text
     raw_ents, raw_rels = _parse_graph(llm(build_graph_prompt(text)))
     verified: dict[str, str] = {}  # normalized → canonical
     for e in raw_ents:
         raw = e.strip()
-        if raw and raw in text:  # 환각컷: 본문에 실재해야 채택
+        if raw and raw in verify:  # 환각컷: 검증 텍스트(원문)에 실재해야 채택
             n = _normalize_entity(raw)
             if len(n) >= ENTITY_MIN_LEN and n not in ENTITY_STOPWORDS:
                 verified[n] = n
@@ -141,3 +152,36 @@ def extract_graph(
         if r.subject.strip() in allowed and r.object.strip() in allowed and r.edge in EDGE_TYPES
     ]
     return Graph(entities=sorted(allowed), relations=rels)
+
+
+def build_summary_prompt(text: str) -> str:
+    """요약 프롬프트(㉛) — 핵심 사실·엔티티 보존, 새 정보 추가 금지. 짧게(3~5문장)."""
+    return (
+        "다음 기사를 핵심 사실과 등장 엔티티(기업·인물·사건·기관·섹터) 중심으로 "
+        "3~5문장으로 요약하라. 기사에 없는 내용은 추가하지 말 것. 설명 없이 요약만 출력.\n\n"
+        f"기사:\n{text}"
+    )
+
+
+def summarize(text: str, llm: Callable[[str], str]) -> str:
+    """본문 요약(㉛) — 로컬 Ollama. llm은 출력 상한(SUMMARY_NUM_PREDICT)이 바인딩된 caller."""
+    return llm(build_summary_prompt(text)).strip()
+
+
+def extract_article_graph(
+    body: str,
+    seed_entities: list[str],
+    llm: Callable[[str], str],
+    llm_summary: Callable[[str], str],
+    *,
+    summary_threshold: int = SUMMARY_THRESHOLD,
+) -> Graph:
+    """오케스트레이션(㉛) — 긴 본문은 요약 후 NER(원문검증), 짧은 본문은 원문 NER.
+
+    긴 본문을 통째로 NER하면 로컬 LLM 생성이 타임아웃 → 요약(출력 상한)으로 선행 축약.
+    seed_entities는 항상 원문 기준(news-feed 태깅). 요약 경로도 검증은 원문(알파1).
+    """
+    if len(body) <= summary_threshold:
+        return extract_graph(body, seed_entities, llm)
+    summary = summarize(body, llm_summary)
+    return extract_graph(summary, seed_entities, llm, verify_text=body)
