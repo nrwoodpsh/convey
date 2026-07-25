@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from common.kafka import KafkaProducer
 from common.logging import configure_logging
@@ -21,29 +22,43 @@ from app.external_client import (
     NaverNewsClient,
     RssClient,
 )
+from app.admin_client import derive_queries, fetch_config, source_enabled
 from app.tagging import TICKER_DICT, tag_entity_names, tag_event_hints, tag_tickers
 
 configure_logging(settings.log_level)
 logger = logging.getLogger("news-feed")
 
 
+async def _maybe(enabled: bool, fn: Any, *args: Any) -> list[dict[str, Any]]:
+    """소스 토글(㉝ P3) — enabled면 스레드로 수집, 아니면 빈 목록."""
+    if not enabled:
+        return []
+    result: list[dict[str, Any]] = await asyncio.to_thread(fn, *args)
+    return result
+
+
 async def _news_loop(producer: KafkaProducer) -> None:
-    """RSS + Naver + DART → research.ingested (기존 주기)."""
+    """RSS + Naver + DART → research.ingested. 검색어·소스는 admin 설정(㉝ P3), 실패 시 폴백."""
     feed_urls = [u.strip() for u in settings.feed_urls.split(",") if u.strip()]
     rss = RssClient(feed_urls)
     naver = NaverNewsClient(settings.naver_client_id, settings.naver_client_secret)
     dart = DartClient(settings.dart_api_key)
-    queries = list(TICKER_DICT)  # 종목명으로 타깃 검색
-    logger.info(
-        "news 루프 feeds=%d naver=%s dart=%s",
-        len(feed_urls), bool(settings.naver_client_id), bool(settings.dart_api_key),
-    )
+    fallback_queries = list(TICKER_DICT)  # admin 불가 시 하드코딩 폴백
+    logger.info("news 루프 시작 (검색어·소스는 admin /admin/config)")
     while True:
-        # 동기 클라이언트(feedparser·httpx)를 스레드로 — 이벤트 루프 비블로킹 + 병렬 수집
+        cfg = await asyncio.to_thread(fetch_config)  # 운영자 설정(admin ㉝ P3)
+        if cfg:
+            queries = derive_queries(cfg) or fallback_queries
+            use_rss, use_naver, use_dart = (
+                source_enabled(cfg, "rss"), source_enabled(cfg, "naver"),
+                source_enabled(cfg, "dart"),
+            )
+        else:  # 폴백: 하드코딩 종목·전 소스 ON
+            queries, use_rss, use_naver, use_dart = fallback_queries, True, True, True
         rss_docs, naver_docs, dart_docs = await asyncio.gather(
-            asyncio.to_thread(rss.fetch),
-            asyncio.to_thread(naver.search, queries),
-            asyncio.to_thread(dart.fetch_recent),
+            _maybe(use_rss, rss.fetch),
+            _maybe(use_naver, naver.search, queries),
+            _maybe(use_dart, dart.fetch_recent),
         )
         docs = rss_docs + naver_docs + dart_docs
         for doc in docs:

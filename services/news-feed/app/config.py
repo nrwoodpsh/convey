@@ -25,6 +25,9 @@ class Settings(BaseAppSettings):
     poll_interval_seconds: float = 300.0  # 뉴스·공시 폴링 주기
     macro_poll_interval_seconds: float = 86400.0  # 거시 폴링(저빈도 — 일 1회)
 
+    # 운영자 설정(admin ㉝ P3) — 종목·키워드·소스 토글을 API로 읽어 수집에 반영. 실패 시 하드코딩 폴백.
+    admin_url: str = "http://admin:8000"
+
     # 소스 (ADR 0008): 무료
     # 경제 뉴스 RSS 확대(㉙/E2) — 연합·한경 + 매경·이데일리·서울경제. 실패 피드는 건너뜀(RssClient).
     feed_urls: str = (
