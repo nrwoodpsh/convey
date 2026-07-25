@@ -4,8 +4,14 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.admin import repository as repo
-from app.domains.admin.models import Keyword, ScenarioTemplate, SourceToggle, Stock
-from app.domains.admin.schemas import ConfigView, StockOut, TemplateIn
+from app.domains.admin.models import (
+    BackgroundAsset,
+    Keyword,
+    ScenarioTemplate,
+    SourceToggle,
+    Stock,
+)
+from app.domains.admin.schemas import BackgroundIn, ConfigView, StockOut, TemplateIn
 
 
 async def build_config(session: AsyncSession) -> ConfigView:
@@ -112,5 +118,45 @@ async def delete_template(session: AsyncSession, tid: int) -> bool:
     if t is None:
         return False
     await session.delete(t)
+    await session.commit()
+    return True
+
+
+# ── 배경 자산(㊴) CRUD ──
+def _apply_background(b: BackgroundAsset, body: BackgroundIn) -> None:
+    b.name = body.name
+    b.tags = body.tags
+    b.path = body.path
+    b.kind = body.kind
+    b.license = body.license
+    b.enabled = body.enabled
+
+
+async def create_background(session: AsyncSession, body: BackgroundIn) -> BackgroundAsset:
+    b = BackgroundAsset(name=body.name, path=body.path)
+    _apply_background(b, body)
+    session.add(b)
+    await session.commit()
+    await session.refresh(b)
+    return b
+
+
+async def update_background(
+    session: AsyncSession, bid: int, body: BackgroundIn
+) -> BackgroundAsset | None:
+    b = await repo.get_background(session, bid)
+    if b is None:
+        return None
+    _apply_background(b, body)
+    await session.commit()
+    await session.refresh(b)
+    return b
+
+
+async def delete_background(session: AsyncSession, bid: int) -> bool:
+    b = await repo.get_background(session, bid)
+    if b is None:
+        return False
+    await session.delete(b)
     await session.commit()
     return True

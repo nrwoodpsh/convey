@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Integer, String
+from sqlalchemy import JSON, Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -65,4 +65,21 @@ class ScenarioTemplate(Base):
     use_macro: Mapped[bool] = mapped_column(Boolean, default=True)    # 거시 문장 포함
     use_closing: Mapped[bool] = mapped_column(Boolean, default=False)  # 마무리 문장 포함
     hook_tone: Mapped[str] = mapped_column(String(100), default="담백한 분석 톤")  # 훅 톤
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class BackgroundAsset(Base):
+    """영상 배경 자산 라이브러리(㊴) — 운영자 등록. video-assembly가 섹터/태그 매칭으로 선택.
+
+    파일 본체는 공유 볼륨(대용량), admin_db엔 경로·태그·라이선스 메타만(가드레일: 출처 계승).
+    """
+
+    __tablename__ = "background_asset"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)  # 섹터/무드 매칭 태그
+    path: Mapped[str] = mapped_column(String(300))              # 공유 볼륨 경로
+    kind: Mapped[str] = mapped_column(String(10), default="image")  # image | video
+    license: Mapped[str] = mapped_column(String(200), default="")   # 출처·라이선스(가드레일)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)

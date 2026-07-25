@@ -20,6 +20,10 @@ class Settings(BaseAppSettings):
     pexels_api_key: str = ""
     broll_mode: str = "video"
 
+    # 배경 라이브러리(㊴) — 운영자 등록 배경을 admin에서 조회, 섹터/태그 매칭 우선.
+    admin_url: str = "http://admin:8000"
+    background_mode: str = "auto"  # auto | library | stock (generated는 후속)
+
     # 쇼츠 목표 길이(㉑) — 음성 짧아도 최소, 1분 이내 상한
     min_duration: float = 24.0
     max_duration: float = 55.0

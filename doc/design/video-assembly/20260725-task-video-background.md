@@ -8,11 +8,11 @@
 - **목표**: 배경을 **운영자가 관리**(등록 라이브러리 + 생성 + Pexels) + **섹터 매칭**으로 관련성↑, 차트·수치·자막 뒤 **반투명 패널**로 가독성↑.
 - **가드레일**: 미디어 생성은 외부 API 허용(부패방지 계층·원문 미전달). 수치·차트는 결정론 렌더(알파③) 불변. 배경 자산 라이선스 메타 계승·기록.
 - **Acceptance Criteria**:
-  - [ ] AC1: **배경 라이브러리** — 운영자가 admin에 배경(영상/이미지) 등록(태그) → video-assembly가 **섹터/태그 매칭**으로 선택. **검증: 자동차 태그 배경 등록 → 현대차 job이 그 배경 사용.**
-  - [ ] AC2: **배경 우선순위(auto)** — 라이브러리 매칭 → 생성 → Pexels → 로컬카드, 실패 시 다음. **검증: 라이브러리 없을 때 Pexels 폴백.**
-  - [ ] AC3: **생성 배경(옵션)** — image-gen으로 귀여운 이미지 생성·켄번즈. 키 없으면 skip(폴백). **검증: 키 있을 때 생성물 사용, 없을 때 폴백.**
-  - [ ] AC4: **가독성 패널** — 차트·수치·자막 뒤 반투명 패널. **검증: 합성 프레임에서 텍스트 뒤 패널 존재·가독성.**
-  - [ ] AC5: 가드레일 — 수치·차트 결정론 렌더 불변, 배경 라이선스 메타 기록, 원문 텍스트 외부 미전달.
+  - [x] AC1: **배경 라이브러리** — 운영자가 admin에 배경(영상/이미지) 등록(태그) → video-assembly가 **섹터/태그 매칭**으로 선택. **검증: 자동차 태그 배경 등록 → 현대차 job이 그 배경 사용.** — 완료(admin `background_asset` CRUD, 라이브: 자동차 배경 등록 → 현대차(005380·섹터 자동차) 매칭·삼성전자 무관 None).
+  - [x] AC2: **배경 우선순위(auto)** — 라이브러리 매칭 → 생성 → Pexels → 로컬카드, 실패 시 다음. **검증: 라이브러리 없을 때 Pexels 폴백.** — 완료(worker: auto=라이브러리→Pexels→로컬카드 폴백 체인, `composed` 게이팅). ※생성 단계는 P2(image-gen)에서 삽입.
+  - [~] AC3: **생성 배경(옵션)** — image-gen으로 귀여운 이미지 생성·켄번즈. 키 없으면 skip(폴백). **검증: 키 있을 때 생성물 사용, 없을 때 폴백.** — **P2 이관**(image-gen 신규 래퍼). 우선순위 체인에 삽입 지점만 확보(auto: 라이브러리→[생성]→Pexels→로컬).
+  - [x] AC4: **가독성 패널** — 차트·수치·자막 뒤 반투명 패널. **검증: 합성 프레임에서 텍스트 뒤 패널 존재·가독성.** — 완료(assemble drawbox 중앙밴드 black@0.45, 실측: 코너 밝기 253 vs 중앙 139로 어둡게).
+  - [x] AC5: 가드레일 — 수치·차트 결정론 렌더 불변, 배경 라이선스 메타 기록, 원문 텍스트 외부 미전달. — 라이선스 계승(선택 배경 license→회신 broll_meta), render.py 불변, admin_db API-only.
 
 ## 2. 핵심 결정 & 사각지대
 - **결정 1 — 배경 소스 = 전략**: admin 라이브러리(등록) + 생성(image-gen) + Pexels(stock) + 로컬. auto 우선순위. broll 무관 해소.
@@ -51,5 +51,6 @@
 ## 7. History
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
+| 20260725 | /builder(P1) | **㊴ P1 구현**(사용자 결정: 검증가능 핵심만, image-gen·업로드 UI는 후속). admin: `background_asset` 모델·CRUD API·마이그레이션 0003(tags=JSON). video-assembly: `background.py`(`fetch_backgrounds` HMAC·`match_background` 섹터/태그+파일존재 순수함수·`select_library_background`), worker 배경 우선순위(auto: 라이브러리→Pexels→로컬, `_Overlay` TypedDict로 공용 kwargs). assemble: 가독성 패널(drawbox 중앙밴드 black@0.45, `panel` 파라미터). config: `admin_url`·`background_mode`. **검증**: 단위 video-assembly 7(매칭 4+회귀)·admin 2, mypy strict 0(admin 5·va 4, `**common` 기존 부채 12건도 TypedDict로 해소), 계약 0. 실스택(재빌드 admin·va): 마이그레이션 0003·CRUD POST 200·라이브 매칭(현대차→자동차 배경/삼성전자 무관 None·라이선스 계승)·패널 실측(코너 253 vs 중앙 139). **이탈/범위**: (a) `_Overlay` TypedDict 신설로 baseline mypy 부채 해소. (b) AC3 생성배경=P2(image-gen), 업로드 UI=M2. 우선순위 체인에 생성 삽입 지점만 확보. |
 | 20260725 | /design | 영상 배경 전략 + 가독성. §7 실측(broll 무관·가독성↓). 결정: 배경 = admin 라이브러리(등록)+**생성(image-gen 정식 포함)**+Pexels+로컬, auto 우선순위·섹터 매칭. 생성은 귀여운 이미지+켄번즈(영상생성 후속). 가독성 패널(반투명). 자산은 공유 볼륨+메타. 의존 ㉝(admin)·image-gen(신규). 수치·차트 결정론 불변(알파③). 계약 mypy 통과. |
 | 20260725 | /design(추가) | 사용자 결정 — 브랜드 톤 우려(금융 신뢰 vs 귀여움) 인지 후 **귀여운 생성 배경을 정식 모드로 확정**(옵션/후속 격하 없이). image-gen 래퍼를 정식 구성요소로. |

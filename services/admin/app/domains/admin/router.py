@@ -10,16 +10,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import get_session
 from app.domains.admin import service
-from app.domains.admin.models import ScenarioTemplate
+from app.domains.admin.models import BackgroundAsset, ScenarioTemplate
 from app.domains.admin.repository import (
+    get_background,
     get_settings,
     get_template,
+    list_backgrounds,
     list_keywords,
     list_sources,
     list_stocks,
     list_templates,
 )
 from app.domains.admin.schemas import (
+    BackgroundIn,
+    BackgroundOut,
     ConfigView,
     KeywordIn,
     KeywordOut,
@@ -175,4 +179,59 @@ async def delete_template(
     ok = await service.delete_template(session, tid)
     if not ok:
         raise AppError("not_found", f"템플릿 없음: {tid}", status=404)
+    return {"deleted": True}
+
+
+# ── 배경 자산(㊴) — 대시보드 CRUD, video-assembly가 섹터/태그 매칭으로 조회 ──
+def _bg_out(b: BackgroundAsset) -> BackgroundOut:
+    return BackgroundOut(
+        id=b.id, name=b.name, tags=list(b.tags or []), path=b.path,
+        kind=b.kind, license=b.license, enabled=b.enabled,
+    )
+
+
+@router.get("/backgrounds", response_model=list[BackgroundOut])
+async def backgrounds(
+    session: AsyncSession = Depends(get_session), _: UserContext = Depends(_dep)
+) -> list[BackgroundOut]:
+    return [_bg_out(b) for b in await list_backgrounds(session)]
+
+
+@router.get("/backgrounds/{bid}", response_model=BackgroundOut)
+async def background(
+    bid: int, session: AsyncSession = Depends(get_session), _: UserContext = Depends(_dep)
+) -> BackgroundOut:
+    b = await get_background(session, bid)
+    if b is None:
+        raise AppError("not_found", f"배경 없음: {bid}", status=404)
+    return _bg_out(b)
+
+
+@router.post("/backgrounds", response_model=BackgroundOut)
+async def create_background(
+    body: BackgroundIn,
+    session: AsyncSession = Depends(get_session), _: UserContext = Depends(_dep),
+) -> BackgroundOut:
+    return _bg_out(await service.create_background(session, body))
+
+
+@router.put("/backgrounds/{bid}", response_model=BackgroundOut)
+async def update_background(
+    bid: int, body: BackgroundIn,
+    session: AsyncSession = Depends(get_session), _: UserContext = Depends(_dep),
+) -> BackgroundOut:
+    b = await service.update_background(session, bid, body)
+    if b is None:
+        raise AppError("not_found", f"배경 없음: {bid}", status=404)
+    return _bg_out(b)
+
+
+@router.delete("/backgrounds/{bid}")
+async def delete_background(
+    bid: int,
+    session: AsyncSession = Depends(get_session), _: UserContext = Depends(_dep),
+) -> dict[str, bool]:
+    ok = await service.delete_background(session, bid)
+    if not ok:
+        raise AppError("not_found", f"배경 없음: {bid}", status=404)
     return {"deleted": True}

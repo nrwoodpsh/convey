@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.admin.models import (
+    BackgroundAsset,
     CollectionSettings,
     Keyword,
     ScenarioTemplate,
@@ -61,3 +62,14 @@ async def list_templates(session: AsyncSession) -> list[ScenarioTemplate]:
 
 async def get_template(session: AsyncSession, tid: int) -> ScenarioTemplate | None:
     return await session.get(ScenarioTemplate, tid)
+
+
+async def list_backgrounds(session: AsyncSession) -> list[BackgroundAsset]:
+    rows = (
+        await session.execute(select(BackgroundAsset).order_by(BackgroundAsset.id))
+    ).scalars().all()
+    return list(rows)
+
+
+async def get_background(session: AsyncSession, bid: int) -> BackgroundAsset | None:
+    return await session.get(BackgroundAsset, bid)

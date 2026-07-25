@@ -70,3 +70,26 @@ class TemplateIn(BaseModel):
     use_closing: bool = False
     hook_tone: str = "담백한 분석 톤"
     enabled: bool = True
+
+
+class BackgroundOut(BaseModel):
+    """배경 자산(㊴) — video-assembly가 섹터/태그 매칭으로 선택."""
+
+    id: int
+    name: str
+    tags: list[str]
+    path: str
+    kind: str
+    license: str
+    enabled: bool
+
+
+class BackgroundIn(BaseModel):
+    """배경 자산 등록·수정 — 파일은 공유 볼륨, 여기엔 경로·태그·라이선스 메타만."""
+
+    name: str
+    tags: list[str] = []
+    path: str
+    kind: str = "image"  # image | video
+    license: str = ""
+    enabled: bool = True

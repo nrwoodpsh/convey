@@ -106,8 +106,13 @@ def _run(
     captions: list[Caption] | None = None,
     subtitle: str | None = None,
     badge: str | None = None,
+    panel: bool = True,
+    panel_opacity: float = 0.45,
 ) -> str:
-    """공용 합성 — 배경 위에 차트·수치(팝)·자막·배지·인트로/아웃트로를 순서대로 오버레이."""
+    """공용 합성 — 배경 위에 차트·수치(팝)·자막·배지·인트로/아웃트로를 순서대로 오버레이.
+
+    panel(㊴/AC4): 차트·수치 뒤 반투명 패널(drawbox) — 배경과 겹쳐 가독성↓ 문제(§7) 해소.
+    """
     inputs = list(bg_inputs)  # 입력0 = 배경
     idx = 1
 
@@ -127,7 +132,14 @@ def _run(
         inputs.extend(["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"])
     ai = idx
 
-    parts = [f"[0:v]{bg_filter}[bg]", f"[bg][{ci}:v]overlay=(W-w)/2:(H-h)/2[v]"]
+    # 가독성 패널(㊴/AC4) — 차트·수치가 앉는 중앙 밴드에 반투명 어둠 박스. 배경/텍스트 분리.
+    bg_chain = bg_filter
+    if panel:
+        bg_chain += (
+            f",drawbox=x=iw*0.03:y=ih*0.24:w=iw*0.94:h=ih*0.52:"
+            f"color=black@{panel_opacity:.2f}:t=fill"
+        )
+    parts = [f"[0:v]{bg_chain}[bg]", f"[bg][{ci}:v]overlay=(W-w)/2:(H-h)/2[v]"]
     # 수치 팝 — chart 구간에 fade-in 등장
     if ni is not None:
         parts.append(f"[{ni}:v]fade=t=in:st={pop_start:.2f}:d=0.4:alpha=1[num]")
@@ -179,6 +191,7 @@ def build_short(
     pop_start: float = 0.0,
     intro_png: str | None = None,
     outro_png: str | None = None,
+    panel: bool = True,
 ) -> str:
     """정지 이미지 → 쇼츠. 켄번즈(zoompan) 모션 + 오버레이 연출(㉖). 9:16."""
     frames = int(duration * fps)
@@ -191,7 +204,7 @@ def build_short(
         chart_png=chart_png, out_mp4=out_mp4, duration=duration, fps=fps,
         audio_path=audio_path, numbers_png=numbers_png, pop_start=pop_start,
         intro_png=intro_png, outro_png=outro_png,
-        captions=captions, subtitle=subtitle, badge=badge,
+        captions=captions, subtitle=subtitle, badge=badge, panel=panel,
     )
 
 
@@ -210,6 +223,7 @@ def build_short_video(
     pop_start: float = 0.0,
     intro_png: str | None = None,
     outro_png: str | None = None,
+    panel: bool = True,
 ) -> str:
     """영상 배경(스톡 broll) → 쇼츠. 배경 9:16 크롭·반복 + 오버레이 연출(㉖). 투명 차트."""
     bg_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1"
@@ -218,5 +232,5 @@ def build_short_video(
         chart_png=chart_png, out_mp4=out_mp4, duration=duration, fps=fps,
         audio_path=audio_path, numbers_png=numbers_png, pop_start=pop_start,
         intro_png=intro_png, outro_png=outro_png,
-        captions=captions, subtitle=subtitle, badge=badge,
+        captions=captions, subtitle=subtitle, badge=badge, panel=panel,
     )
