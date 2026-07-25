@@ -49,12 +49,12 @@ async def _news_loop(producer: KafkaProducer) -> None:
         for doc in docs:
             if not doc.get("source_url"):
                 continue  # 가드레일: 무출처 제외
-            text = f"{doc['title']} {doc['body']}"
+            title, body = str(doc["title"]), str(doc["body"])
             event = {
                 **doc,
-                "tickers": tag_tickers(text),
-                "entities": tag_entity_names(text),
-                "event_hints": tag_event_hints(text),
+                "tickers": tag_tickers(title, body),       # 제목 우선 + 본문 조건(㉜)
+                "entities": tag_entity_names(title, body),
+                "event_hints": tag_event_hints(f"{title} {body}"),
             }
             await producer.publish(settings.topic_ingested, event, key=doc["source_url"])
         logger.info("research.ingested 발행 %d건", len(docs))

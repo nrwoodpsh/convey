@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from common.stocks import ENTITY_NAMES, STOCK_NAMES
 
 # POC 종목 사전 (이름 → ticker) — 공유 소스(common.stocks) 확대분(㉕/A3). 운영에선 KRX 전체.
@@ -18,15 +20,33 @@ EVENT_KEYWORDS: dict[str, tuple[str, ...]] = {
 }
 
 
+# 본문 단독(제목에 없음) 태깅 최소 등장 횟수 — 1회 스침 제외, N회 실질 언급만(㉜).
+BODY_MIN_MENTIONS = 2
+
+
 def _suppress_substrings(names: list[str]) -> list[str]:
     """부분 문자열 이름 제거(㉙/E2) — 'SK'가 'SK하이닉스'에 포함되면 짧은 쪽 제거(오탐 방지)."""
     return [n for n in names if not any(n != m and n in m for m in names)]
 
 
-def tag_tickers(text: str, dictionary: dict[str, str] | None = None) -> list[str]:
-    """본문에서 **사전에 있는 종목만** 태깅. 등장 순서 유지·중복 제거. 사전 밖은 태깅 안 함."""
+def _tag_names(title: str, body: str, candidates: Iterable[str]) -> list[str]:
+    """제목 우선 + 본문 조건(㉜) — 오탐 차단.
+
+    - 제목에 있으면 채택(확정).
+    - 제목엔 없고 본문에 BODY_MIN_MENTIONS회 이상이면 채택(실질 언급).
+    - 본문 1회 스침(예: 보일러 기사의 '카카오톡')은 제외.
+    이름-내-이름 부분문자열 억제는 그대로.
+    """
+    names = list(candidates)
+    title_hit = [n for n in names if n in title]
+    body_hit = [n for n in names if n not in title and body.count(n) >= BODY_MIN_MENTIONS]
+    return _suppress_substrings(title_hit + body_hit)
+
+
+def tag_tickers(title: str, body: str, dictionary: dict[str, str] | None = None) -> list[str]:
+    """**사전 종목만** 태깅(제목 우선 + 본문 조건, ㉜). 등장 순서 유지·중복 제거. 사전 밖 태깅 안 함."""
     d = dictionary or TICKER_DICT
-    matched = _suppress_substrings([name for name in d if name in text])
+    matched = _tag_names(title, body, d)
     tagged: list[str] = []
     for name in matched:
         if d[name] not in tagged:
@@ -34,13 +54,13 @@ def tag_tickers(text: str, dictionary: dict[str, str] | None = None) -> list[str
     return tagged
 
 
-def tag_entity_names(text: str, names: tuple[str, ...] | None = None) -> list[str]:
-    """본문에 등장하는 사전 엔티티 **이름** 목록(관계추출 allowed용) — 종목 + 섹터(㉕/A3).
+def tag_entity_names(title: str, body: str, names: tuple[str, ...] | None = None) -> list[str]:
+    """사전 엔티티 **이름** 목록(관계추출 allowed용) — 종목 + 섹터. 제목 우선 + 본문 조건(㉜).
 
     사전 밖은 포함 안 함(환각 방지). 짧은 부분 문자열 이름은 긴 이름에 포함되면 제거(㉙/E2).
     """
     allow = names or ENTITY_NAMES
-    return _suppress_substrings([name for name in allow if name in text])
+    return _tag_names(title, body, allow)
 
 
 def tag_event_hints(text: str) -> list[str]:
