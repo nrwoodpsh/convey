@@ -19,6 +19,7 @@ from app.assemble import Caption, build_bg_cuts, build_short, build_short_video
 from app.background import select_library_background
 from app.broll import PexelsClient
 from app.config import settings
+from app.imagegen import make_client
 
 
 class _Overlay(TypedDict):
@@ -207,8 +208,22 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
                 composed = True
                 logger.info("배경=라이브러리 job=%s name=%s", job_id, lib.name)
 
-        # broll 배경(Pexels) — 복수 클립 하드 컷 전환(㉙/D), 실패 시 단일 (library 모드 전용이면 생략)
-        if not composed and mode != "library":
+        # 생성 배경(㊴ P2) — image-gen(외부 이미지 API·부패방지). 키 없으면 skip → 다음 폴백.
+        if not composed and mode in ("auto", "generated"):
+            gen = await asyncio.to_thread(
+                make_client().generate, str(chart["ticker"]), f"{base}-gen"
+            )
+            if gen is not None:
+                broll_meta = {
+                    "bg_source": "generated", "bg_prompt": gen.prompt,
+                    "bg_model": gen.source, "bg_license": gen.license,
+                }
+                await asyncio.to_thread(build_short, gen.path, chart_png, out_mp4, **common)
+                composed = True
+                logger.info("배경=생성 job=%s model=%s", job_id, gen.source)
+
+        # broll 배경(Pexels) — 복수 클립 하드 컷 전환(㉙/D), 실패 시 단일
+        if not composed and mode in ("auto", "stock"):
             client = PexelsClient(settings.pexels_api_key)
             queries = [
                 str(q) for q in (event.get("broll_queries") or [broll_query]) if str(q).strip()

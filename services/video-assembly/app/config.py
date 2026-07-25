@@ -22,7 +22,12 @@ class Settings(BaseAppSettings):
 
     # 배경 라이브러리(㊴) — 운영자 등록 배경을 admin에서 조회, 섹터/태그 매칭 우선.
     admin_url: str = "http://admin:8000"
-    background_mode: str = "auto"  # auto | library | stock (generated는 후속)
+    background_mode: str = "auto"  # auto | library | generated | stock
+
+    # 생성 배경(㊴ P2) — 외부 이미지 생성 API(부패방지·프롬프트만). 키 없으면 skip → Pexels 폴백.
+    image_gen_api_key: str = ""
+    image_gen_api_url: str = "https://api.openai.com/v1"  # OpenAI images 호환
+    image_gen_model: str = "dall-e-3"
 
     # 쇼츠 목표 길이(㉑) — 음성 짧아도 최소, 1분 이내 상한
     min_duration: float = 24.0

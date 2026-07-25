@@ -1,7 +1,7 @@
 """배경 라이브러리 선택(㊴) — 운영자 등록 배경을 admin에서 조회, 섹터/태그 매칭.
 
-우선순위(auto): ①admin 라이브러리 섹터/태그 매칭 → ②Pexels(stock) → ③로컬 카드.
-(생성 배경 image-gen은 후속 라운드.) broll(Pexels)이 종목과 무관하던 문제(§7) 해소가 목적.
+우선순위(auto): ①admin 라이브러리 섹터/태그 매칭 → ②생성(image-gen, ㊴ P2) → ③Pexels(stock)
+→ ④로컬 카드. broll(Pexels)이 종목과 무관하던 문제(§7) 해소가 목적.
 
 가드레일: 자산 라이선스 메타 계승(선택된 배경의 license를 합성 회신에 기록). admin_db 직접접근 금지(API만).
 """
