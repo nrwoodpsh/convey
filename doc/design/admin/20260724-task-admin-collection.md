@@ -67,4 +67,5 @@
 ## 8. History
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
+| 20260725 | /builder(P1) | **admin 서비스 신설** — `services/admin/`(FastAPI+SQLAlchemy+alembic), admin_db 4테이블(stock·keyword·source_toggle·collection_settings), `GET /admin/config` + 종목·키워드·소스·기간 CRUD(게이트웨이 HMAC dep). 시드(`app/seed.py`, 멱등 upsert). compose 블록·gateway `/admin` 라우트·infra `admin_db`. **검증**: 단위 1(seed), mypy strict 0(11파일+gateway), 실스택(admin_db 생성·마이그레이션 4테이블·시드 47·`build_config` 라이브: 활성 47·소스 ON·기간 1w). **이탈**: 시드가 코스피200(≥150) 아닌 **common.stocks 47(static)** — 네이버 200 스크래핑은 후속(P1 골격 우선, `seed_source` 스위치 유지). P2~P4는 후속 라운드. |
 | 20260724 | /design | 운영자 설정 admin 서비스 + admin_db + 광역 수집. 결정: 단계화(P1~P4)·종목마스터 admin_db 승격(점진 이관)·코스피200 pykrx 시드(계정 신청, 정적 fallback). 사각지대: KRX 계정 활성 지연·종목 마스터 이중진실(이관 순서)·네이버 검색 폭증·대시보드→admin 결합. 신규 도메인 `admin`. 계약 `api-contract-admin.py` mypy 통과. ADR 0016. research 그래프 마스터 이관은 후속(범위 밖). |

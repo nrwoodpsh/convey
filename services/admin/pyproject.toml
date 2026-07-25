@@ -1,0 +1,20 @@
+[project]
+name = "admin-service"
+version = "0.1.0"
+description = "운영자 설정 — 수집·관심(종목·키워드·소스·기간) + 종목 마스터. 대시보드 쓰기·워커 API 읽기 (ADR 0016)."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "common",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

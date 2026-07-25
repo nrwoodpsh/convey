@@ -6,3 +6,4 @@ CREATE DATABASE sample_db;
 CREATE DATABASE research_db;   -- 시세·기사·출처(사실). 관계·인과는 Neo4j research_graph(round①)
 CREATE DATABASE content_db;    -- 잡·스크립트·자산·완성본 상태
 CREATE DATABASE publishing_db; -- 발행 기록·상태(멱등·재시도) (round⑤)
+CREATE DATABASE admin_db;      -- 운영자 설정(종목·키워드·소스·기간) + 종목 마스터 (ADR 0016, 라운드㉝)
