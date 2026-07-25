@@ -22,5 +22,8 @@ class Settings(BaseAppSettings):
     score_threshold: float = 0.5  # 이 미만은 발행 안 함(무의미 양산 방지)
     cooldown_seconds: float = 86400.0  # 같은 종목 재발행 억제(하루)
 
+    # 운영자 관심 종목(admin ㉝ P4) — 활성 종목만 이슈 발행 게이팅. 실패 시 게이팅 없음(폴백).
+    admin_url: str = "http://admin:8000"
+
 
 settings = Settings()

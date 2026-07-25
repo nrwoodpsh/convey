@@ -14,7 +14,7 @@
   - [ ] AC2(P1): admin API `GET /admin/config` 가 `{stocks(enabled), keywords, sources, period}` 반환. **검증: 계약 mypy + 실제 호출 200·형식 일치.**
   - [ ] AC3(P2): 대시보드 "설정" 메뉴에서 종목 on/off·키워드 추가/삭제·소스 토글·기간 변경 → admin_db 반영. **검증: UI→API→DB 왕복(값 변경 후 config에 반영).**
   - [ ] AC4(P3): news-feed가 admin config로 수집(하드코딩 제거) — 소스 토글·기간·종목·키워드 반영, RSS 카테고리 확대(경제+사회+정치). **검증: 소스 off 시 그 소스 미수집 / 키워드 추가 시 그 검색 수행.**
-  - [ ] AC5(P4): issue-detector가 관심(코스피200 ∪ 키워드)을 admin에서 읽어 랭킹. **검증: 관심 밖 종목이 이슈 후보에서 빠짐.**
+  - [x] AC5(P4): issue-detector가 관심(코스피200 ∪ 키워드)을 admin에서 읽어 랭킹. **검증: 관심 밖 종목이 이슈 후보에서 빠짐.** — 완료(run_emitter가 매 주기 `fetch_config`→`watchlist_tickers`로 게이팅, 실스택 47종목·미등록 제외 확인).
   - [ ] AC6(전체): 가드레일 — **Database per Service**(admin_db는 admin만 직접접근, 나머지는 API), 자격증명 `.env`(커밋 금지), 무출처 0·로컬 LLM만 불변.
 
 ## 2. 사각지대 & 핵심 결정 (수정 가능성 순)
@@ -67,6 +67,7 @@
 ## 8. History
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
+| 20260725 | /builder(P4) | **issue-detector ↔ admin 관심목록 게이팅**. `admin_client.py`(신규): `fetch_config`(GET /admin/config, HMAC east-west, 실패 시 None) · `watchlist_tickers(config)`(활성 종목 티커 집합). `worker.run_emitter`: 매 주기 `asyncio.to_thread(fetch_config)`→watch 도출, `watch is not None and r.ticker not in watch` → 발행 제외(관심 밖). admin 불가 시 watch=None(게이팅 없음, 전량). config에 `admin_url`, pyproject에 `httpx`(순수 워커라 미보유였음). **검증**: 단위 7/7(watchlist 2 + ranking 회귀 5), mypy strict 0(3파일), 실스택(재빌드): admin_db 47종목 라이브 조회·게이팅(005930 in / 미등록 999999 out). **이탈**: issue-detector에 httpx 신규 의존 추가(east-west 호출 위해). |
 | 20260725 | /builder(P3) | **news-feed ↔ admin config 연동**. `admin_client.py`: `fetch_config`(GET /admin/config, HMAC east-west, 실패 시 None) · `derive_queries`(활성 종목명+키워드, 중복제거) · `source_enabled`(토글, 미설정 ON). `worker._news_loop`: admin config로 검색어·소스 결정(`_maybe`로 소스별 조건 수집), 실패 시 하드코딩 폴백. config에 `admin_url`. **검증**: 단위 13/13(admin_client 3 + tagging 회귀 10), mypy strict 0(3파일), 실스택(재빌드): news-feed가 admin config 라이브 조회 → 검색어 47(하드코딩 아닌 admin_db 종목)·소스 토글·기간 1w. **이탈/범위**: 광역 RSS(사회·정치 피드 확대)는 feed_urls 설정이라 후속(admin 관리로 이관 가능). 검색어·소스 토글이 P3 핵심. |
 | 20260725 | /builder(P1) | **admin 서비스 신설** — `services/admin/`(FastAPI+SQLAlchemy+alembic), admin_db 4테이블(stock·keyword·source_toggle·collection_settings), `GET /admin/config` + 종목·키워드·소스·기간 CRUD(게이트웨이 HMAC dep). 시드(`app/seed.py`, 멱등 upsert). compose 블록·gateway `/admin` 라우트·infra `admin_db`. **검증**: 단위 1(seed), mypy strict 0(11파일+gateway), 실스택(admin_db 생성·마이그레이션 4테이블·시드 47·`build_config` 라이브: 활성 47·소스 ON·기간 1w). **이탈**: 시드가 코스피200(≥150) 아닌 **common.stocks 47(static)** — 네이버 200 스크래핑은 후속(P1 골격 우선, `seed_source` 스위치 유지). P2~P4는 후속 라운드. |
 | 20260724 | /design | 운영자 설정 admin 서비스 + admin_db + 광역 수집. 결정: 단계화(P1~P4)·종목마스터 admin_db 승격(점진 이관)·코스피200 pykrx 시드(계정 신청, 정적 fallback). 사각지대: KRX 계정 활성 지연·종목 마스터 이중진실(이관 순서)·네이버 검색 폭증·대시보드→admin 결합. 신규 도메인 `admin`. 계약 `api-contract-admin.py` mypy 통과. ADR 0016. research 그래프 마스터 이관은 후속(범위 밖). |

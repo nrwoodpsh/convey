@@ -11,6 +11,7 @@ from typing import Any
 
 from common.kafka import KafkaProducer, consume_forever
 
+from app.admin_client import fetch_config, watchlist_tickers
 from app.config import settings
 from app.ranking import RollingRanker
 
@@ -68,9 +69,13 @@ async def run_emitter(ranker: RollingRanker) -> None:
     try:
         while True:
             now = datetime.now(timezone.utc)
+            cfg = await asyncio.to_thread(fetch_config)  # 운영자 관심목록(admin ㉝ P4)
+            watch = watchlist_tickers(cfg) if cfg else None  # None=게이팅 없음(폴백)
             for r in ranker.top(settings.emit_top_k, settings.window_hours, now):
                 if r.score < settings.score_threshold:
                     continue
+                if watch is not None and r.ticker not in watch:
+                    continue  # 관심 밖 종목 제외(㉝ P4)
                 last = cooldown.get(r.ticker)
                 if last and (now - last).total_seconds() < settings.cooldown_seconds:
                     continue  # 스로틀: 쿨다운 내 재발행 억제
