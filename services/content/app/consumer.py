@@ -17,6 +17,7 @@ from common.kafka import KafkaProducer, consume_forever
 from common.security import H_SIGNATURE, H_TIMESTAMP, H_USER_ID, sign_internal
 from common.stocks import stock_name
 
+from app.admin_client import fetch_template_def
 from app.config import settings
 from app.db import SessionLocal
 from app.domains.content import media, repository, service
@@ -40,16 +41,19 @@ async def _set_status(job_id: int, status: JobStatus, **fields: Any) -> None:
 
 
 async def _call_agent_script(
-    job_id: int, topic: str, ticker: str | None, template: str = "analysis"
+    job_id: int, topic: str, ticker: str | None, template_def: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """agent /agent/script east-west 호출(HMAC 서명). template(㉔): 시나리오 구성·톤."""
+    """agent /agent/script east-west 호출(HMAC 서명). template_def(㊳): 대본 형식 노브(없으면 기본형)."""
     path = "/agent/script"
     ts, sig = sign_internal(secret=settings.gateway_internal_secret, user_id="content", path=path)
     headers = {H_USER_ID: "content", H_TIMESTAMP: ts, H_SIGNATURE: sig}
     async with httpx.AsyncClient(timeout=300) as client:
         resp = await client.post(
             f"{settings.agent_url.rstrip('/')}{path}",
-            json={"job_id": job_id, "topic": topic, "ticker": ticker, "template": template},
+            json={
+                "job_id": job_id, "topic": topic, "ticker": ticker,
+                "template_def": template_def,
+            },
             headers=headers,
         )
         resp.raise_for_status()
@@ -67,7 +71,10 @@ async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> Non
     topic = str(event["topic"])
     ticker = event.get("ticker")
     auto = bool(event.get("auto", True))  # 값 없으면 안전값(기존 자동 경로)
-    template = str(event.get("template", "analysis"))  # 시나리오 템플릿(㉔)
+    template_id = event.get("template_id")  # 시나리오 템플릿(㊳), 없으면 기본형
+    template_def = (
+        await fetch_template_def(int(template_id)) if template_id is not None else None
+    )
     await _set_status(job_id, JobStatus.SCRIPTING)
 
     # 스크립트 생성 — 일시 실패(LLM 타임아웃 등) 재시도(㉙/F1, 상한·백오프).
@@ -75,7 +82,7 @@ async def handle_generate(event: dict[str, Any], producer: KafkaProducer) -> Non
     last_exc: Exception | None = None
     for attempt in range(settings.retry_max + 1):
         try:
-            script_res = await _call_agent_script(job_id, topic, ticker, template)
+            script_res = await _call_agent_script(job_id, topic, ticker, template_def)
             break
         except Exception as exc:  # noqa: BLE001 — 재시도 후 최종 실패만 기록
             last_exc = exc

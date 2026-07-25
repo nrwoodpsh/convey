@@ -18,7 +18,7 @@ from app.agent.memory import Memory
 from app.config import settings
 from app.llm_client import LLMClient
 from app.rag.retriever import Retriever
-from app.script.builder import build_script
+from app.script.builder import ScenarioKnobs, build_script
 
 configure_logging(settings.log_level)
 gateway_user = make_gateway_dep(settings.gateway_internal_secret)
@@ -82,11 +82,21 @@ async def chat(req: ChatReq, user: UserContext = Depends(gateway_user)) -> dict[
 
 
 # ── 근거 스크립트 생성 (content → agent, east-west) — 라운드⑤ ──
+class TemplateDefIn(BaseModel):
+    """대본 형식 노브(㊳) — content가 admin_db 템플릿을 조회해 전달. 구조·톤만(알파①)."""
+
+    n_facts: int = 3
+    n_relations: int = 2
+    use_macro: bool = True
+    use_closing: bool = False
+    hook_tone: str = "담백한 분석 톤"
+
+
 class ScriptReq(BaseModel):
     job_id: int
     topic: str = Field(min_length=1, max_length=200)
     ticker: str | None = None
-    template: str = "analysis"  # 시나리오 템플릿(㉔): breaking|analysis|story
+    template_def: TemplateDefIn | None = None  # 시나리오 템플릿 노브(㊳). 미지정 시 기본(분석형)
 
 
 class CitationOut(BaseModel):
@@ -125,9 +135,15 @@ async def agent_script(req: ScriptReq, user: UserContext = Depends(gateway_user)
     if ev.price is None:
         raise AppError("AGENT001", "가격 근거가 없어 스크립트를 만들 수 없습니다.", status=422)
     llm = _sync_llm(settings.gateway_internal_secret, settings.llm_inference_url)
+    # 템플릿 노브(㊳) — content가 admin_db에서 조회해 전달. 미지정 시 기본(분석형).
+    d = req.template_def
+    knobs = (
+        ScenarioKnobs(d.n_facts, d.n_relations, d.use_macro, d.use_closing, d.hook_tone)
+        if d is not None else None
+    )
     # build_script + 그 안의 동기 LLM 호출을 스레드로 격리(이벤트루프 비블로킹)
     script = await asyncio.to_thread(
-        build_script, req.topic, ev.price, ev.facts, llm, ev.macros, req.template, ev.relations
+        build_script, req.topic, ev.price, ev.facts, llm, ev.macros, knobs, ev.relations
     )
     chart = ChartOut(
         ticker=ev.price["ticker"], close=ev.price["close"],

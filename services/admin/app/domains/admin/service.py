@@ -4,8 +4,8 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.admin import repository as repo
-from app.domains.admin.models import Keyword, SourceToggle, Stock
-from app.domains.admin.schemas import ConfigView, StockOut
+from app.domains.admin.models import Keyword, ScenarioTemplate, SourceToggle, Stock
+from app.domains.admin.schemas import ConfigView, StockOut, TemplateIn
 
 
 async def build_config(session: AsyncSession) -> ConfigView:
@@ -72,3 +72,45 @@ async def set_period(session: AsyncSession, period: str) -> str:
     settings_row.period = period
     await session.commit()
     return period
+
+
+# ── 시나리오 템플릿(㊳) CRUD ──
+def _apply_template(t: ScenarioTemplate, body: TemplateIn) -> None:
+    t.name = body.name
+    t.description = body.description
+    t.n_facts = body.n_facts
+    t.n_relations = body.n_relations
+    t.use_macro = body.use_macro
+    t.use_closing = body.use_closing
+    t.hook_tone = body.hook_tone
+    t.enabled = body.enabled
+
+
+async def create_template(session: AsyncSession, body: TemplateIn) -> ScenarioTemplate:
+    t = ScenarioTemplate(name=body.name)
+    _apply_template(t, body)
+    session.add(t)
+    await session.commit()
+    await session.refresh(t)
+    return t
+
+
+async def update_template(
+    session: AsyncSession, tid: int, body: TemplateIn
+) -> ScenarioTemplate | None:
+    t = await repo.get_template(session, tid)
+    if t is None:
+        return None
+    _apply_template(t, body)
+    await session.commit()
+    await session.refresh(t)
+    return t
+
+
+async def delete_template(session: AsyncSession, tid: int) -> bool:
+    t = await repo.get_template(session, tid)
+    if t is None:
+        return False
+    await session.delete(t)
+    await session.commit()
+    return True

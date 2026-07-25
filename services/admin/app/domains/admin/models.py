@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-from sqlalchemy import Boolean, String
+from sqlalchemy import Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -47,3 +47,22 @@ class CollectionSettings(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     period: Mapped[str] = mapped_column(String(4), default="1w")  # 1w | 1m | 3m
+
+
+class ScenarioTemplate(Base):
+    """대본 형식 템플릿(㊳) — agent 하드코딩 노브를 admin_db로 승격. 운영자 편집.
+
+    구조·톤만 제어(알파①): 수치는 price/macro, 관계는 그래프 근거 — 템플릿이 사실을 만들지 않음.
+    """
+
+    __tablename__ = "scenario_template"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(50))
+    description: Mapped[str] = mapped_column(String(200), default="")
+    n_facts: Mapped[int] = mapped_column(Integer, default=3)          # 사용 사실 개수
+    n_relations: Mapped[int] = mapped_column(Integer, default=2)      # 사용 그래프 관계 개수
+    use_macro: Mapped[bool] = mapped_column(Boolean, default=True)    # 거시 문장 포함
+    use_closing: Mapped[bool] = mapped_column(Boolean, default=False)  # 마무리 문장 포함
+    hook_tone: Mapped[str] = mapped_column(String(100), default="담백한 분석 톤")  # 훅 톤
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)

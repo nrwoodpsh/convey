@@ -9,11 +9,11 @@
 - **목표**: 현 템플릿 노브(`facts·relations·macro·closing·hook`)를 **admin_db로 승격**, 대시보드에서 CRUD, 대본 생성 시 사용.
 - **가드레일(알파①)**: 템플릿은 **구조·톤만** 제어. 수치는 price/macro, 관계는 그래프 근거 — 템플릿이 사실을 만들지 않음(자유 프롬프트 금지).
 - **Acceptance Criteria**:
-  - [ ] AC1: `admin_db.scenario_template` + CRUD API. 기본 3종 시드(속보/분석/스토리). **검증: 시드 3행, API list/create/update/delete.**
-  - [ ] AC2: 대시보드 설정에서 템플릿 추가·편집·토글 → admin_db 반영. **검증: UI→API→DB 왕복.**
-  - [ ] AC3: 대본 생성 시 **선택 템플릿의 노브가 반영**(facts 수·관계 수·macro·closing·hook 톤). **검증: 다른 템플릿 → 다른 구조의 대본.**
-  - [ ] AC4: 하위호환 — agent `build_script`가 템플릿 정의를 인자로 받되 미지정 시 기본(분석형). 기존 대본 생성 안 깨짐. **검증: 기본 호출 회귀 통과.**
-  - [ ] AC5: 가드레일 — 수치·관계는 Evidence에서(템플릿 무관), 무출처 0·로컬 Ollama 불변.
+  - [x] AC1: `admin_db.scenario_template` + CRUD API. 기본 3종 시드(속보/분석/스토리). **검증: 시드 3행, API list/create/update/delete.** — 완료(마이그레이션 0002, 시드 3종 라이브, CRUD 왕복 POST id=4·DELETE·삭제후 404).
+  - [~] AC2: 대시보드 설정에서 템플릿 추가·편집·토글 → admin_db 반영. **검증: UI→API→DB 왕복.** — **부분**: 마법사 템플릿 선택이 admin_db template_id(1/2/3)로 배선됨. 템플릿 CRUD 편집 화면(추가·편집·토글 UI)은 M2 대시보드 리디자인으로 이관(㉝ P2와 동일 패턴).
+  - [x] AC3: 대본 생성 시 **선택 템플릿의 노브가 반영**(facts 수·관계 수·macro·closing·hook 톤). **검증: 다른 템플릿 → 다른 구조의 대본.** — 완료(content가 template_id로 admin 노브 조회 라이브: id1 사실1·마무리X vs id3 사실2·마무리O; build_script 구조 차이 단위검증).
+  - [x] AC4: 하위호환 — agent `build_script`가 템플릿 정의를 인자로 받되 미지정 시 기본(분석형). 기존 대본 생성 안 깨짐. **검증: 기본 호출 회귀 통과.** — 완료(`_DEFAULT_KNOBS`=분석형, 기존 test_builder 3종 회귀 통과).
+  - [x] AC5: 가드레일 — 수치·관계는 Evidence에서(템플릿 무관), 무출처 0·로컬 Ollama 불변. — 노브는 구조·톤만, citation guard·수치 슬롯 로직 불변.
 
 ## 2. 핵심 결정 & 사각지대
 - **결정 1 — 구조형 템플릿**(자유 프롬프트 아님): 노브(facts/relations/macro/closing/hook)만. 자유 프롬프트는 LLM 환각 위험(알파① 위배)이라 기각.
@@ -44,4 +44,5 @@
 ## 7. History
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
+| 20260725 | /builder | **㊳ 구현**. admin: `scenario_template` 모델·CRUD API(list/get/create/update/delete)·시드 3종·마이그레이션 0002. agent: `_TEMPLATES` dict 제거 → `ScenarioKnobs` dataclass + `_DEFAULT_KNOBS`(분석형), `build_script(knobs=...)`, ScriptReq에 `template_def`. content: `admin_client.fetch_template_def`(GET /admin/templates/{id}, HMAC), consumer가 `template_id`로 노브 조회해 agent에 전달, service/schemas/ui_router `template`→`template_id`, index.html 칩 data-v=1/2/3. **검증**: 단위(agent 노브 구조차이+기본형 5, admin 시드 2)·mypy strict 0·계약 mypy 0·실스택(시드 3·CRUD 왕복·content 조회 id별 노브차). **이탈 2건**: (a) seed에서 `asyncio.run` 2회 호출→asyncpg "different loop" 오류, `seed_all()` 단일 루프로 수정. (b) 명시적 id 시드가 SERIAL 시퀀스 미전진→신규 생성 id=1 충돌(500), `setval`로 시퀀스 보정. **범위**: AC2 템플릿 CRUD 편집 UI는 M2로 이관(선택 배선만). |
 | 20260725 | /design | 시나리오 템플릿 관리(운영자). 현 하드코딩 노브(facts/relations/macro/closing/hook)를 admin_db로 승격, 대시보드 CRUD, agent가 정의 인자로 사용. 구조형(자유 프롬프트 기각·알파① 보존). ㉝ admin 연장(admin_db 선행). 계약 mypy 통과. 기본 3종 시드로 하위호환. |

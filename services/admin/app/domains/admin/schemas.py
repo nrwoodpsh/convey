@@ -43,3 +43,30 @@ class ConfigView(BaseModel):
     keywords: list[str]
     sources: dict[str, bool]
     period: str
+
+
+class TemplateOut(BaseModel):
+    """시나리오 템플릿(㊳) — content/agent가 대본 생성에 사용하는 구조 노브."""
+
+    id: int
+    name: str
+    description: str
+    n_facts: int
+    n_relations: int
+    use_macro: bool
+    use_closing: bool
+    hook_tone: str
+    enabled: bool
+
+
+class TemplateIn(BaseModel):
+    """템플릿 생성·수정 입력 — 구조·톤만(수치·관계는 Evidence, 알파①)."""
+
+    name: str
+    description: str = ""
+    n_facts: int = 3
+    n_relations: int = 2
+    use_macro: bool = True
+    use_closing: bool = False
+    hook_tone: str = "담백한 분석 톤"
+    enabled: bool = True

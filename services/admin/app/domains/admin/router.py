@@ -10,7 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import get_session
 from app.domains.admin import service
-from app.domains.admin.repository import get_settings, list_keywords, list_sources, list_stocks
+from app.domains.admin.models import ScenarioTemplate
+from app.domains.admin.repository import (
+    get_settings,
+    get_template,
+    list_keywords,
+    list_sources,
+    list_stocks,
+    list_templates,
+)
 from app.domains.admin.schemas import (
     ConfigView,
     KeywordIn,
@@ -20,6 +28,8 @@ from app.domains.admin.schemas import (
     SourceIn,
     StockOut,
     StockToggle,
+    TemplateIn,
+    TemplateOut,
 )
 
 _dep = make_gateway_dep(settings.gateway_internal_secret)  # 게이트웨이 HMAC 신뢰헤더 검증
@@ -110,3 +120,59 @@ async def set_period(
     if body.period not in ("1w", "1m", "3m"):
         raise AppError("bad_request", "period는 1w|1m|3m", status=400)
     return {"period": await service.set_period(session, body.period)}
+
+
+# ── 시나리오 템플릿(㊳) — 대시보드 CRUD, content/agent가 대본 생성에 조회 ──
+def _tpl_out(t: ScenarioTemplate) -> TemplateOut:
+    return TemplateOut(
+        id=t.id, name=t.name, description=t.description, n_facts=t.n_facts,
+        n_relations=t.n_relations, use_macro=t.use_macro, use_closing=t.use_closing,
+        hook_tone=t.hook_tone, enabled=t.enabled,
+    )
+
+
+@router.get("/templates", response_model=list[TemplateOut])
+async def templates(
+    session: AsyncSession = Depends(get_session), _: UserContext = Depends(_dep)
+) -> list[TemplateOut]:
+    return [_tpl_out(t) for t in await list_templates(session)]
+
+
+@router.get("/templates/{tid}", response_model=TemplateOut)
+async def template(
+    tid: int, session: AsyncSession = Depends(get_session), _: UserContext = Depends(_dep)
+) -> TemplateOut:
+    t = await get_template(session, tid)
+    if t is None:
+        raise AppError("not_found", f"템플릿 없음: {tid}", status=404)
+    return _tpl_out(t)
+
+
+@router.post("/templates", response_model=TemplateOut)
+async def create_template(
+    body: TemplateIn,
+    session: AsyncSession = Depends(get_session), _: UserContext = Depends(_dep),
+) -> TemplateOut:
+    return _tpl_out(await service.create_template(session, body))
+
+
+@router.put("/templates/{tid}", response_model=TemplateOut)
+async def update_template(
+    tid: int, body: TemplateIn,
+    session: AsyncSession = Depends(get_session), _: UserContext = Depends(_dep),
+) -> TemplateOut:
+    t = await service.update_template(session, tid, body)
+    if t is None:
+        raise AppError("not_found", f"템플릿 없음: {tid}", status=404)
+    return _tpl_out(t)
+
+
+@router.delete("/templates/{tid}")
+async def delete_template(
+    tid: int,
+    session: AsyncSession = Depends(get_session), _: UserContext = Depends(_dep),
+) -> dict[str, bool]:
+    ok = await service.delete_template(session, tid)
+    if not ok:
+        raise AppError("not_found", f"템플릿 없음: {tid}", status=404)
+    return {"deleted": True}

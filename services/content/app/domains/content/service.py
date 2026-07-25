@@ -35,13 +35,13 @@ async def start_generation(
     owner_id: str,
     *,
     auto: bool = True,
-    template: str = "analysis",
+    template_id: int | None = None,
 ) -> int:
     """생성 잡 시작 — 잡(pending) 커밋 후 content.generate 발행(비동기 consumer 픽업).
 
     auto=True(자동양산): 스크립트 후 합성까지 무정지. auto=False(대시보드 수동, ㉓): 스크립트
     생성 후 scenario_ready에서 정지 → 사람이 승인해야 합성(approve_scenario).
-    template(㉔): 시나리오 구성·톤(breaking|analysis|story) — agent로 전달.
+    template_id(㊳): admin_db 시나리오 템플릿 id — consumer가 노브를 조회해 agent로 전달(없으면 기본형).
     """
     job = GenerationJob(
         status=JobStatus.PENDING.value, topic=req.topic, ticker=req.ticker, owner_id=owner_id
@@ -52,7 +52,7 @@ async def start_generation(
     await producer.publish(
         settings.topic_generate,
         {"job_id": job.id, "topic": req.topic, "ticker": req.ticker,
-         "auto": auto, "template": template},
+         "auto": auto, "template_id": template_id},
         key=str(job.id),
     )
     return job.id

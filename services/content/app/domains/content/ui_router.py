@@ -117,7 +117,7 @@ async def ui_generate(
     ref = str(payload.article_id) if payload.article_id is not None else None
     req = GenerateRequest(topic=payload.title, ticker=payload.ticker, issue_ref=ref)
     job_id = await service.start_generation(
-        session, producer, req, owner_id="dashboard", auto=False, template=payload.template
+        session, producer, req, owner_id="dashboard", auto=False, template_id=payload.template_id
     )
     return {"job_id": job_id}
 

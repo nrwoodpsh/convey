@@ -4,7 +4,13 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domains.admin.models import CollectionSettings, Keyword, SourceToggle, Stock
+from app.domains.admin.models import (
+    CollectionSettings,
+    Keyword,
+    ScenarioTemplate,
+    SourceToggle,
+    Stock,
+)
 
 _SOURCES = ("naver", "rss", "dart")
 
@@ -44,3 +50,14 @@ async def get_settings(session: AsyncSession) -> CollectionSettings:
         session.add(row)
         await session.commit()
     return row
+
+
+async def list_templates(session: AsyncSession) -> list[ScenarioTemplate]:
+    rows = (
+        await session.execute(select(ScenarioTemplate).order_by(ScenarioTemplate.id))
+    ).scalars().all()
+    return list(rows)
+
+
+async def get_template(session: AsyncSession, tid: int) -> ScenarioTemplate | None:
+    return await session.get(ScenarioTemplate, tid)

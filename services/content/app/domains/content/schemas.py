@@ -63,7 +63,7 @@ class DashboardGenerateReq(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     ticker: str | None = Field(default=None, max_length=20)
     article_id: int | None = None
-    template: str = "analysis"  # 시나리오 템플릿(㉔): breaking|analysis|story
+    template_id: int | None = None  # 시나리오 템플릿(㊳) admin_db id, 없으면 기본형
 
 
 class ScriptEditSection(BaseModel):

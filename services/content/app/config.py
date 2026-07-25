@@ -31,6 +31,8 @@ class Settings(BaseAppSettings):
     agent_url: str = "http://agent:8000"
     # research(오늘자 기사 목록, 대시보드 ㉓) east-west 호출
     research_url: str = "http://research:8000"
+    # admin(시나리오 템플릿 정의, ㊳) east-west 호출
+    admin_url: str = "http://admin:8000"
 
 
 settings = Settings()

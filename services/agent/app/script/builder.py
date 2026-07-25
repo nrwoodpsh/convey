@@ -138,16 +138,24 @@ class Script:
     citations: list[Citation] = field(default_factory=list)
 
 
-# 시나리오 템플릿(구성·톤 3종, ㉔) — 기사 선택 후 사용자가 고름.
-# 사용 사실 개수·거시 포함·마무리(closing) 여부·훅 문체를 달리한다. 기본 analysis(회귀 0).
-_TEMPLATES: dict[str, dict[str, object]] = {
-    "breaking": {"facts": 1, "relations": 1, "macro": False, "closing": False,
-                 "hook": "속보 톤(급박하게)"},
-    "analysis": {"facts": 3, "relations": 2, "macro": True, "closing": False,
-                 "hook": "담백한 분석 톤"},
-    "story": {"facts": 2, "relations": 1, "macro": True, "closing": True,
-              "hook": "이야기를 여는 도입 톤"},
-}
+@dataclass(frozen=True)
+class ScenarioKnobs:
+    """대본 형식 노브(㊳) — 구조·톤만 제어(알파①). 수치·관계는 Evidence에서(템플릿 무관).
+
+    admin_db.scenario_template에서 승격. 대본 생성 시 content가 조회해 전달한다.
+    """
+
+    n_facts: int          # 사용 사실 개수
+    n_relations: int      # 사용 그래프 관계 개수
+    use_macro: bool       # 거시 문장 포함
+    use_closing: bool     # 마무리 문장 포함
+    hook_tone: str        # 훅 톤 문구
+
+
+# 기본 노브(㊳/AC4) — 미지정 시 분석형(기존 회귀 0). admin_db 시드 id=2와 동일.
+_DEFAULT_KNOBS = ScenarioKnobs(
+    n_facts=3, n_relations=2, use_macro=True, use_closing=False, hook_tone="담백한 분석 톤"
+)
 
 
 def build_script(
@@ -156,21 +164,21 @@ def build_script(
     facts: list[FactEvidence],
     llm: Callable[[str], str],
     macros: list[MacroEvidence] | None = None,
-    template: str = "analysis",
+    knobs: ScenarioKnobs | None = None,
     relations: list[RelationEvidence] | None = None,
 ) -> Script:
     """근거 스크립트 생성 — 수치는 price·macro 슬롯, 관계는 그래프(근거), 연결 문장만 LLM.
 
-    template(㉔): breaking / analysis(기본) / story. relations(㉕/알파): 그래프 인과 →
-    'relation' 섹션(예 "삼성전자과(와) SK하이닉스가 경쟁 구도"). 근거=article_id(무출처 폐기).
+    knobs(㊳): 대본 형식(사실 수·관계 수·거시·마무리·훅 톤). 미지정 시 기본(분석형).
+    relations(㉕/알파): 그래프 인과 → 'relation' 섹션. 근거=article_id(무출처 폐기).
     """
     macros = macros or []
     relations = relations or []
-    tpl = _TEMPLATES.get(template, _TEMPLATES["analysis"])
-    n_facts = int(tpl["facts"])  # type: ignore[call-overload]
-    n_rels = int(tpl.get("relations", 0))  # type: ignore[call-overload]
-    use_macro = bool(tpl["macro"])
-    use_closing = bool(tpl["closing"])
+    k = knobs or _DEFAULT_KNOBS
+    n_facts = k.n_facts
+    n_rels = k.n_relations
+    use_macro = k.use_macro
+    use_closing = k.use_closing
     used_facts = facts[:n_facts]
     # 근거(출처) 있는 관계만, 종목 관련 우선(subject/object에 종목명 포함)
     valid_rels = [r for r in relations if r.get("source_url")][:n_rels]
@@ -193,7 +201,7 @@ def build_script(
     raw_hook = llm(
         "다음 뉴스로 주식 쇼츠를 여는 훅 한 문장을 써라.\n"
         f"뉴스: {topic}\n핵심: {lead}\n"
-        f"조건: {tpl['hook']}, 종목명 포함, 40자 이내, 숫자·과장·따옴표 금지."
+        f"조건: {k.hook_tone}, 종목명 포함, 40자 이내, 숫자·과장·따옴표 금지."
     ).strip().strip("\"'“”")
     hook = raw_hook if (raw_hook and _no_new_digits(raw_hook, allowed)) else f"{name or ticker} 관련 이슈, 지금 짚어봅니다"
 
