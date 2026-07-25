@@ -7,10 +7,10 @@
 - **문제(§6 실측)**: `issue.selected`에서 삼성전자 score **812**(정상 18~). 원인: `RollingRanker.ingest_news`가 `research.ingested` 올 때마다 **무조건 +1** → **5분 재발행 중복**(research.ingested 8만 건)이 `news_count`를 부풀림 → 점수 폭발·랭킹 왜곡. research는 `source_url` 멱등이나 issue-detector는 아님.
 - **목표**: 윈도우 내 **유일 source_url만 카운트**(멱등). score 공식·가중치·임계·윈도우 불변 — 중복만 제거.
 - **Acceptance Criteria**:
-  - [ ] AC1: 같은 `source_url` 재수신은 news_count 안 늘림. **검증: 단위 — 같은 url 3회 ingest → news_count=1.**
-  - [ ] AC2: 다른 url은 각각 카운트. **검증: url 2개 → news_count=2.**
-  - [ ] AC3: 윈도우 밖(오래된) 뉴스는 제외(기존 유지). **검증: since 이전 ts 제외.**
-  - [ ] AC4: 회귀 — 기존 ranking 테스트 통과, score 공식·top·임계 불변. mypy·계약.
+  - [x] AC1: 같은 `source_url` 재수신은 news_count 안 늘림. **검증: 단위 — 같은 url 3회 ingest → news_count=1.**
+  - [x] AC2: 다른 url은 각각 카운트. **검증: url 2개 → news_count=2.**
+  - [x] AC3: 윈도우 밖(오래된) 뉴스는 제외(기존 유지). **검증: since 이전 ts 제외.**
+  - [x] AC4: 회귀 — 기존 ranking 테스트 통과, score 공식·top·임계 불변. mypy·계약.
 
 ## 2. 핵심 결정 & 사각지대
 - **결정**: 중복 제거는 **issue-detector 내부**(source_url 집합) — 발행측(news-feed) 재발행 자체는 별개(㉝ 수집 재설계에서 다룸). 여기선 소비측 카운트만 교정.
@@ -35,4 +35,5 @@
 ## 7. History
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
+| 20260725 | /builder | 구현·검증. `ranking.py`: `_TickerState.news` list→dict(source_url→ts), `ingest_news(ticker, source_url, ts)`, `_metrics` 유일 카운트(`news.values()`). `worker.py on_news`가 source_url 전달. **검증**: 단위 5/5(중복 3회→1·다른url 2건·윈도우·회귀), mypy strict 0, 호출부 전수(worker.py만). 실스택(재빌드): 같은 url 5회+유일1 → news_count=2(6 아님) 라이브 확인 → score 폭발 소멸. |
 | 20260725 | /design | news_count 중복 제거. §6 실측(score 812=재발행 중복). `_TickerState.news` dict(source_url→ts), `ingest_news`에 source_url, 유일 카운트. 공식·임계 불변. 계약 mypy 통과. ADR 불요(버그 수정). 발행측 재발행은 ㉝에서 별도. |

@@ -21,11 +21,19 @@ def test_ranks_by_change_desc() -> None:
 
 def test_news_count_respects_window() -> None:
     r = RollingRanker(RankWeights(w_change=0.0, w_volume=0.0, w_news=1.0))
-    r.ingest_news("A", BASE)
-    r.ingest_news("A", BASE + timedelta(minutes=5))
-    r.ingest_news("A", BASE - timedelta(hours=48))  # 윈도우 밖
+    r.ingest_news("A", "u1", BASE)
+    r.ingest_news("A", "u2", BASE + timedelta(minutes=5))
+    r.ingest_news("A", "u3", BASE - timedelta(hours=48))  # 윈도우 밖
     top = r.top(10, 24, BASE + timedelta(minutes=10))
-    assert top[0].news_count == 2
+    assert top[0].news_count == 2  # u1·u2 (윈도우 내 유일 url)
+
+
+def test_news_count_dedup_same_url() -> None:  # ㊲ — 재발행 중복은 1건
+    r = RollingRanker(RankWeights(w_change=0.0, w_volume=0.0, w_news=1.0))
+    for m in (0, 5, 6):  # 같은 url 3회(5분 재발행 흉내)
+        r.ingest_news("A", "same-url", BASE + timedelta(minutes=m))
+    top = r.top(10, 24, BASE + timedelta(minutes=10))
+    assert top[0].news_count == 1  # 중복 제거 → 폭발 방지
 
 
 def test_window_excludes_old_ticks() -> None:

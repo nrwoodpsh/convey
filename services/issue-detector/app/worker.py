@@ -33,8 +33,9 @@ async def run_consumers(ranker: RollingRanker) -> None:
 
     async def on_news(event: dict[str, Any]) -> None:
         ts = _parse_ts(event.get("published_at"))
+        source_url = str(event.get("source_url", ""))
         for ticker in event.get("tickers", []):
-            ranker.ingest_news(ticker, ts)
+            ranker.ingest_news(ticker, source_url, ts)  # source_url로 중복 제거(㊲)
 
     await asyncio.gather(
         consume_forever(

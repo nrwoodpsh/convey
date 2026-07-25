@@ -20,7 +20,7 @@ class RankWeights:
 @dataclass
 class _TickerState:
     ticks: list[tuple[datetime, float, int]] = field(default_factory=list)  # (ts, close, volume)
-    news: list[datetime] = field(default_factory=list)
+    news: dict[str, datetime] = field(default_factory=dict)  # source_url → ts (중복 제거, ㊲)
 
 
 @dataclass
@@ -42,12 +42,13 @@ class RollingRanker:
     def ingest_tick(self, ticker: str, close: float, volume: int, ts: datetime) -> None:
         self._state.setdefault(ticker, _TickerState()).ticks.append((ts, close, volume))
 
-    def ingest_news(self, ticker: str, ts: datetime) -> None:
-        self._state.setdefault(ticker, _TickerState()).news.append(ts)
+    def ingest_news(self, ticker: str, source_url: str, ts: datetime) -> None:
+        # source_url 기준 유일(㊲) — 재발행 중복이 news_count를 부풀리지 않게.
+        self._state.setdefault(ticker, _TickerState()).news[source_url] = ts
 
     def _metrics(self, st: _TickerState, since: datetime) -> tuple[float, float, int] | None:
         ticks = [(ts, c, v) for (ts, c, v) in st.ticks if ts >= since]
-        news_count = sum(1 for ts in st.news if ts >= since)
+        news_count = sum(1 for ts in st.news.values() if ts >= since)
         if not ticks and news_count == 0:
             return None
         change_pct = 0.0
