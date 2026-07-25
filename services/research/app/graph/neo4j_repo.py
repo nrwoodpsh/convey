@@ -28,12 +28,24 @@ class GraphRepo:
             "MATCH (n:Entity {name: $n}) SET n:Stock, n.ticker = $t", n=name, t=ticker
         )
 
-    def upsert_entity(self, name: str, *, source_article_id: int) -> None:
-        """단독 엔티티 노드 upsert(㉚ 개방형 NER) — 관계 없는 엔티티도 그래프에 등재. 근거 결속."""
+    def upsert_entity(
+        self,
+        name: str,
+        *,
+        source_article_id: int,
+        node_type: str = "",
+        event_type: str = "",
+        direction: str = "",
+    ) -> None:
+        """단독 엔티티 노드 upsert(㉚) — 근거 결속. 타입·사건 속성은 있을 때만 SET(㉟, 하위호환)."""
+        sets = ["n.source_article_id = coalesce(n.source_article_id, $aid)"]
+        params: dict[str, object] = {"n": name, "aid": source_article_id}
+        for key, val in (("type", node_type), ("event_type", event_type), ("direction", direction)):
+            if val:
+                sets.append(f"n.{key} = ${key}")
+                params[key] = val
         self._driver.execute_query(
-            "MERGE (n:Entity {name: $n}) "
-            "SET n.source_article_id = coalesce(n.source_article_id, $aid)",
-            n=name, aid=source_article_id,
+            "MERGE (n:Entity {name: $n}) SET " + ", ".join(sets), **params
         )
         self._label_stock(name)
 

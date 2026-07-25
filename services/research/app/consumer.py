@@ -73,7 +73,11 @@ async def handle_ingested(
         extract_article_graph, event["body"], entities, llm, llm_summary
     )
     for ent in g.entities:
-        await asyncio.to_thread(graph.upsert_entity, ent, source_article_id=article.id)
+        et, dr = g.events.get(ent, ("", ""))  # 사건이면 event_type·direction(㉟)
+        await asyncio.to_thread(
+            graph.upsert_entity, ent, source_article_id=article.id,
+            node_type=g.types.get(ent, ""), event_type=et, direction=dr,
+        )
     for rel in g.relations:
         await asyncio.to_thread(
             graph.upsert_relation, rel.subject, rel.edge, rel.object,

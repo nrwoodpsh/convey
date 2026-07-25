@@ -9,9 +9,13 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-EDGE_TYPES: tuple[str, ...] = ("HAS_EVENT", "AFFECTS", "SUPPLIES", "COMPETES", "BELONGS_TO")
+EDGE_TYPES: tuple[str, ...] = (
+    "BELONGS_TO", "HAS_EVENT", "COMPETES", "SUPPLIES", "AFFECTS",   # 기존 5
+    "PARTNERS_WITH", "AFFILIATE_OF", "BENEFITS_FROM", "HURT_BY",    # 확장(협력·계열·수혜·타격)
+    "PRODUCES", "ACQUIRES", "REGULATES",                            # 확장(생산·인수·규제)
+)
 
 
 @dataclass
@@ -63,13 +67,50 @@ def extract_relations(
     ]
 
 
-# ── 개방형 NER(엔티티+관계 1콜, 라운드㉚) — 계약 api-contract-ner.py ──
-ENTITY_TYPES: tuple[str, ...] = ("기업", "인물", "사건", "기관", "섹터")
+# ── 개방형 NER(엔티티+관계 1콜, 라운드㉚) + 온톨로지 확장(㉟) ──
+ENTITY_TYPES: tuple[str, ...] = (
+    "기업", "인물", "사건", "기관", "섹터",   # 기존 5
+    "제품", "테마", "정책", "국가",           # 확장 4
+)
 ENTITY_STOPWORDS: frozenset[str] = frozenset({
     "정부", "시장", "기업", "회사", "경제", "산업", "국내", "해외", "우리", "관련", "이번",
     "오늘", "내년", "올해", "사업", "서비스", "기술", "투자", "실적",
+    # ㉟ 보강 — 일반 조직·집합어(노조 COMPETES 오염 등 차단)
+    "노조", "노사", "이동통신사", "당국", "업계", "고객", "소비자", "국민", "지자체",
 })
 ENTITY_MIN_LEN = 2
+
+# 엣지 domain/range 제약(㉟) — (주어 타입, 목적어 타입). 빈 tuple=제한 없음. 위반 폐기.
+EDGE_DOMAIN_RANGE: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "BELONGS_TO":    (("기업",), ("섹터",)),
+    "HAS_EVENT":     (("기업",), ("사건",)),
+    "COMPETES":      (("기업",), ("기업",)),
+    "SUPPLIES":      (("기업",), ("기업",)),
+    "AFFECTS":       ((), ()),  # 일반 영향 — 제한 없음
+    "PARTNERS_WITH": (("기업",), ("기업",)),
+    "AFFILIATE_OF":  (("기업",), ("기업",)),
+    "BENEFITS_FROM": (("기업",), ("정책", "사건", "테마")),
+    "HURT_BY":       (("기업",), ("정책", "사건")),
+    "PRODUCES":      (("기업",), ("제품",)),
+    "ACQUIRES":      (("기업",), ("기업",)),
+    "REGULATES":     (("기관",), ("기업", "섹터")),
+}
+
+# 사건(Event) 속성(㉟) — 새 노드/엣지 대신 속성으로.
+EVENT_TYPES: tuple[str, ...] = (
+    "실적", "유상증자", "무상증자", "자사주", "배당", "감자", "인수합병",
+    "수주", "신제품", "증설", "소송", "파업", "급등락",
+)
+
+
+@dataclass
+class TypedEntity:
+    """확장 추출 엔티티(㉟) — 이름 + 타입(+ 사건 속성). 레거시(문자열)는 type="" 로."""
+
+    name: str
+    type: str = ""            # ENTITY_TYPES 중 하나(빈 문자열=미상/레거시)
+    event_type: str = ""      # type=="사건"일 때(EVENT_TYPES)
+    direction: str = ""       # 긍정/부정/중립(호재/악재)
 
 # ── 요약 선행 NER(㉛, ADR 0015) ──
 SUMMARY_THRESHOLD = 1500  # 본문 char > 이 값이면 요약 선행. 이하는 원문 그대로 NER.
@@ -78,10 +119,12 @@ SUMMARY_NUM_PREDICT = 256  # 요약 호출 출력 토큰 상한(호출 경계에
 
 @dataclass
 class Graph:
-    """개방형 추출 결과 — 엔티티 + 관계(㉚)."""
+    """개방형 추출 결과 — 엔티티 + 관계(㉚). 타입·사건 속성은 확장(㉟, 하위호환 기본값)."""
 
     entities: list[str]
     relations: list[Relation]
+    types: dict[str, str] = field(default_factory=dict)               # name → 엔티티 타입
+    events: dict[str, tuple[str, str]] = field(default_factory=dict)  # name → (event_type, direction)
 
 
 def _normalize_entity(name: str) -> str:
@@ -93,18 +136,21 @@ def _normalize_entity(name: str) -> str:
 def build_graph_prompt(text: str) -> str:
     types = ", ".join(ENTITY_TYPES)
     edges = ", ".join(EDGE_TYPES)
+    events = ", ".join(EVENT_TYPES)
     return (
         "다음 기사에서 엔티티와 관계를 JSON 객체로 추출하라.\n"
-        f"엔티티 종류: {types}. 반드시 기사에 실제로 나온 표현만.\n"
-        f"허용 엣지: {edges}.\n"
-        '형식: {"entities":["..."],"relations":[{"subject":"...","edge":"...","object":"..."}]}\n'
+        f"엔티티 종류(type): {types}. 반드시 기사에 실제로 나온 표현만.\n"
+        f"사건이면 event_type({events})와 direction(긍정/부정/중립)도.\n"
+        f"허용 엣지(edge): {edges}. 엣지는 타입에 맞게(예: BELONGS_TO는 기업→섹터, HAS_EVENT는 기업→사건).\n"
+        '형식: {"entities":[{"name":"..","type":".."}],'
+        '"relations":[{"subject":"..","edge":"..","object":".."}]}\n'
         "기사에 없는 것은 만들지 말 것. 설명 없이 JSON만 출력.\n\n"
         f"기사:\n{text}"
     )
 
 
-def _parse_graph(raw: str) -> tuple[list[str], list[Relation]]:
-    """LLM 응답에서 {entities, relations} JSON 객체를 관대하게 파싱."""
+def _parse_graph(raw: str) -> tuple[list[TypedEntity], list[Relation]]:
+    """LLM 응답에서 {entities, relations} 파싱(㉟). 엔티티는 {name,type,...} 또는 문자열(레거시)."""
     match = re.search(r"\{.*\}", raw, re.S)
     if not match:
         return [], []
@@ -112,7 +158,15 @@ def _parse_graph(raw: str) -> tuple[list[str], list[Relation]]:
         data = json.loads(match.group(0))
     except json.JSONDecodeError:
         return [], []
-    ents = [str(e) for e in data.get("entities", []) if isinstance(e, str)]
+    ents: list[TypedEntity] = []
+    for e in data.get("entities", []):
+        if isinstance(e, str):  # 레거시 — 이름만(type 미상)
+            ents.append(TypedEntity(name=e))
+        elif isinstance(e, dict) and "name" in e:
+            ents.append(TypedEntity(
+                name=str(e["name"]), type=str(e.get("type", "")),
+                event_type=str(e.get("event_type", "")), direction=str(e.get("direction", "")),
+            ))
     rels: list[Relation] = []
     for item in data.get("relations", []):
         if isinstance(item, dict) and {"subject", "edge", "object"} <= item.keys():
@@ -135,23 +189,47 @@ def extract_graph(
     """
     verify = verify_text if verify_text is not None else text
     raw_ents, raw_rels = _parse_graph(llm(build_graph_prompt(text)))
-    verified: dict[str, str] = {}  # normalized → canonical
+    verified: set[str] = set()
+    types: dict[str, str] = {}                    # name → 타입(미상="")
+    events: dict[str, tuple[str, str]] = {}       # name → (event_type, direction)
     for e in raw_ents:
-        raw = e.strip()
-        if raw and raw in verify:  # 환각컷: 검증 텍스트(원문)에 실재해야 채택
-            n = _normalize_entity(raw)
-            if len(n) >= ENTITY_MIN_LEN and n not in ENTITY_STOPWORDS:
-                verified[n] = n
-    # 사전 seed 합집(seed는 이미 본문 매칭 — 고정확)
+        raw = e.name.strip()
+        if not (raw and raw in verify):           # 환각컷: 원문 실재
+            continue
+        if e.type and e.type not in ENTITY_TYPES:  # ㉟ 타입 검증(허용 밖 폐기, 미상은 통과)
+            continue
+        n = _normalize_entity(raw)
+        if len(n) >= ENTITY_MIN_LEN and n not in ENTITY_STOPWORDS:
+            verified.add(n)
+            types[n] = e.type
+            if e.type == "사건" and (e.event_type or e.direction):
+                events[n] = (e.event_type, e.direction)
+    # 사전 seed 합집(seed는 이미 본문 매칭 — 고정확, 타입 미상)
     for s in seed_entities:
-        verified[s] = s
-    allowed = set(verified)
-    rels = [
-        Relation(r.subject.strip(), r.edge, r.object.strip())
-        for r in raw_rels
-        if r.subject.strip() in allowed and r.object.strip() in allowed and r.edge in EDGE_TYPES
-    ]
-    return Graph(entities=sorted(allowed), relations=rels)
+        verified.add(s)
+        types.setdefault(s, "")
+    rels: list[Relation] = []
+    for r in raw_rels:
+        s, o = r.subject.strip(), r.object.strip()
+        if not (s in verified and o in verified and r.edge in EDGE_TYPES):
+            continue
+        if not _edge_ok(r.edge, types.get(s, ""), types.get(o, "")):  # ㉟ domain/range
+            continue
+        rels.append(Relation(s, r.edge, o))
+    return Graph(entities=sorted(verified), relations=rels, types=types, events=events)
+
+
+def _edge_ok(edge: str, subj_type: str, obj_type: str) -> bool:
+    """엣지-양끝 타입 제약(㉟). 양끝 타입을 알 때만 검사(미상은 허용 — 하위호환·seed)."""
+    dr = EDGE_DOMAIN_RANGE.get(edge)
+    if dr is None:
+        return True
+    dom, rng = dr
+    if dom and subj_type and subj_type not in dom:
+        return False
+    if rng and obj_type and obj_type not in rng:
+        return False
+    return True
 
 
 def build_summary_prompt(text: str) -> str:

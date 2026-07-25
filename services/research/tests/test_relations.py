@@ -101,3 +101,62 @@ def test_article_graph_short_skips_summary() -> None:
     g = extract_article_graph(body, ["삼성전자"], ner_llm, summary_llm)
     assert calls["summary"] == 0  # 요약 미호출
     assert "삼성전자" in g.entities
+
+
+# ── 온톨로지 확장(㉟) — 타입 검증 · 엣지 domain/range · event 속성 ──
+def test_edge_domain_range_drops_misuse() -> None:  # AC2
+    text = "삼성전자가 반도체 분야에서 실적을 냈다."
+
+    def stub(_: str) -> str:
+        return (
+            '{"entities":[{"name":"삼성전자","type":"기업"},{"name":"반도체","type":"섹터"}],'
+            '"relations":[{"subject":"삼성전자","edge":"HAS_EVENT","object":"반도체"},'
+            '{"subject":"삼성전자","edge":"BELONGS_TO","object":"반도체"}]}'
+        )
+
+    g = extract_graph(text, [], stub)
+    edges = {(r.subject, r.edge, r.object) for r in g.relations}
+    assert ("삼성전자", "BELONGS_TO", "반도체") in edges   # 기업→섹터 OK
+    assert ("삼성전자", "HAS_EVENT", "반도체") not in edges  # 목적어=섹터 → 폐기(사건이어야)
+
+
+def test_new_edge_partners_accepted() -> None:  # AC1 — 확장 엣지
+    text = "삼성전자와 엔비디아가 협력한다."
+
+    def stub(_: str) -> str:
+        return (
+            '{"entities":[{"name":"삼성전자","type":"기업"},{"name":"엔비디아","type":"기업"}],'
+            '"relations":[{"subject":"삼성전자","edge":"PARTNERS_WITH","object":"엔비디아"}]}'
+        )
+
+    g = extract_graph(text, [], stub)
+    assert any(r.edge == "PARTNERS_WITH" for r in g.relations)
+
+
+def test_event_type_direction_parsed() -> None:  # AC3
+    text = "삼성전자가 유상증자를 결정했다."
+
+    def stub(_: str) -> str:
+        return (
+            '{"entities":[{"name":"삼성전자","type":"기업"},'
+            '{"name":"유상증자","type":"사건","event_type":"유상증자","direction":"부정"}],'
+            '"relations":[]}'
+        )
+
+    g = extract_graph(text, [], stub)
+    assert "유상증자" in g.entities
+    assert g.events.get("유상증자") == ("유상증자", "부정")
+
+
+def test_type_validation_drops_disallowed() -> None:  # 타입 허용 밖 폐기
+    text = "삼성전자 노조가 파업했다."
+
+    def stub(_: str) -> str:
+        return (
+            '{"entities":[{"name":"삼성전자","type":"기업"},{"name":"노조","type":"조직"}],'
+            '"relations":[]}'
+        )
+
+    g = extract_graph(text, [], stub)
+    assert "삼성전자" in g.entities
+    assert "노조" not in g.entities  # 타입 '조직'(허용 밖) + 스톱워드 → 폐기

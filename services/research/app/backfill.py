@@ -81,7 +81,11 @@ async def run(*, use_llm: bool, limit: int) -> None:
             try:
                 g = extract_article_graph(body, seed, llm, llm_summary)
                 for ent in g.entities:
-                    graph.upsert_entity(ent, source_article_id=int(aid))
+                    et, dr = g.events.get(ent, ("", ""))  # ㉟ 사건 속성
+                    graph.upsert_entity(
+                        ent, source_article_id=int(aid),
+                        node_type=g.types.get(ent, ""), event_type=et, direction=dr,
+                    )
                 for r in g.relations:
                     graph.upsert_relation(r.subject, r.edge, r.object, source_article_id=int(aid))
                     rel_edges += 1
