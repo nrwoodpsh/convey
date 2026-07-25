@@ -81,3 +81,17 @@ class GraphRepo:
             (rec["subject"], rec["edge"], rec["object"], rec["aid"])
             for rec in result.records
         ]
+
+    def graph_stats(self) -> tuple[int, int]:
+        """그래프 규모(대시보드 품질 지표 ㊵) — (노드 수, 관계 수). 실패 시 (0, 0)."""
+        try:
+            r = self._driver.execute_query(
+                "MATCH (n:Entity) WITH count(n) AS nodes "
+                "OPTIONAL MATCH ()-[e]->() RETURN nodes, count(e) AS rels"
+            )
+            if not r.records:
+                return 0, 0
+            rec = r.records[0]
+            return int(rec["nodes"]), int(rec["rels"])
+        except Exception:  # noqa: BLE001 — 지표 조회 실패는 0(대시보드 관대)
+            return 0, 0

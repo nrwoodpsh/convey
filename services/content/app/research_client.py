@@ -34,3 +34,19 @@ async def fetch_articles(*, window_days: int, limit: int) -> list[dict[str, Any]
     except Exception:  # noqa: BLE001 — 대시보드 조회 실패는 빈 목록으로(치명 아님)
         logger.exception("기사 목록 회수 실패 window=%s", window_days)
         return []
+
+
+async def fetch_graph_stats() -> tuple[int, int]:
+    """research GET /research/graph/stats → (노드, 관계) 수. 실패 시 (0, 0)."""
+    path = "/research/graph/stats"
+    ts, sig = sign_internal(secret=settings.gateway_internal_secret, user_id="content", path=path)
+    headers = {H_USER_ID: "content", H_TIMESTAMP: ts, H_SIGNATURE: sig}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{settings.research_url.rstrip('/')}{path}", headers=headers)
+            resp.raise_for_status()
+            d = resp.json()
+            return int(d.get("nodes", 0)), int(d.get("relations", 0))
+    except Exception:  # noqa: BLE001 — 지표 실패는 0(대시보드 관대)
+        logger.warning("그래프 지표 회수 실패")
+        return 0, 0

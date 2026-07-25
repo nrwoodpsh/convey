@@ -127,3 +127,21 @@ class UiStatsRes(BaseModel):
 
     by_status: dict[str, int] = Field(default_factory=dict)
     recent_failed: list[dict[str, str]] = Field(default_factory=list)  # {job_id, topic, error}
+
+
+class MetricsRes(BaseModel):
+    """대시보드 품질 지표(㊵/AC4) — 그래프·기사·이슈·완성 잡 수."""
+
+    graph_nodes: int = 0
+    graph_relations: int = 0
+    articles_today: int = 0
+    issues_selected: int = 0
+    jobs_ready: int = 0
+
+
+class EvidenceRes(BaseModel):
+    """근거 뷰(㊵/AC3) — 관계(그래프)·출처 URL·수치. 신뢰 가시화(알파①)."""
+
+    relations: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    prices: list[str] = Field(default_factory=list)

@@ -13,7 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import get_session
 from app.domains.research import service
-from app.domains.research.schemas import ArticleListResponse, SearchResponse
+from app.domains.research.schemas import (
+    ArticleListResponse,
+    GraphStatsResponse,
+    SearchResponse,
+)
 from app.graph.neo4j_repo import GraphRepo
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -33,6 +37,16 @@ async def articles(
 ) -> ArticleListResponse:
     """수집 기사 목록(대시보드 선택용, 라운드㉓) — 최근 window_days, 최신순."""
     return await service.list_articles(session, window_days=window_days, limit=min(limit, 200))
+
+
+@router.get("/graph/stats", response_model=GraphStatsResponse)
+async def graph_stats(
+    user: UserContext = Depends(gateway_user),
+    graph: GraphRepo = Depends(get_graph),
+) -> GraphStatsResponse:
+    """그래프 규모(노드·관계 수) — 대시보드 품질 지표(㊵). east-west 호출."""
+    nodes, relations = graph.graph_stats()
+    return GraphStatsResponse(nodes=nodes, relations=relations)
 
 
 @router.get("/search", response_model=SearchResponse)

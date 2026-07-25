@@ -27,7 +27,8 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import research_client
+from app import admin_client, research_client
+from app import dashboard as dash
 from app.db import get_session
 from app.domains.content import repository, service
 from app.domains.content.models import Script
@@ -36,9 +37,11 @@ from app.domains.content.schemas import (
     ArticleItem,
     ArticleListRes,
     DashboardGenerateReq,
+    EvidenceRes,
     GenerateRequest,
     JobListRes,
     JobRes,
+    MetricsRes,
     ScriptCiteView,
     ScriptEditReq,
     ScriptSectionView,
@@ -134,6 +137,12 @@ async def ui_stats(session: AsyncSession = Depends(get_session)) -> UiStatsRes:
     )
 
 
+@router.get("/ui/metrics", response_model=MetricsRes)
+async def ui_metrics(session: AsyncSession = Depends(get_session)) -> MetricsRes:
+    """품질 지표(㊵/AC4) — 그래프·오늘 기사·오늘 이슈·완성 잡. 각 원격 실패는 0."""
+    return MetricsRes(**await dash.gather_metrics(session))
+
+
 @router.get("/ui/jobs", response_model=JobListRes)
 async def ui_jobs(
     limit: int = 50,
@@ -161,6 +170,19 @@ async def ui_job_script(
     """시나리오 제시(승인 전) — 잡의 Script. 종목코드 없이 한글명(agent 생성)."""
     script = await repository.get_script_by_job(session, job_id)
     return _to_script_view(script)
+
+
+@router.get("/ui/jobs/{job_id}/evidence", response_model=EvidenceRes)
+async def ui_job_evidence(
+    job_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> EvidenceRes:
+    """근거 뷰(㊵/AC3) — 잡 Script의 관계·출처·수치. 신뢰 가시화(알파①)."""
+    script = await repository.get_script_by_job(session, job_id)
+    if script is None:
+        return EvidenceRes()
+    ev = dash.build_evidence(script.sections, script.citations)
+    return EvidenceRes(**ev)
 
 
 @router.put("/ui/jobs/{job_id}/script", response_model=JobRes)
@@ -213,3 +235,72 @@ async def ui_video(
         media_type="video/mp4",
         filename=f"convey-{content_id}.mp4",
     )
+
+
+# ── 설정 탭(㊵/AC2) — content가 admin(㉝·㊳·㊴) CRUD를 east-west로 중계(Database per Service) ──
+# 탭 → admin 컬렉션 경로. sources/period는 단일 항목이라 별도 처리(아래).
+_SETTINGS_PATH: dict[str, str] = {
+    "stocks": "/admin/stocks",
+    "keywords": "/admin/keywords",
+    "templates": "/admin/templates",
+    "backgrounds": "/admin/backgrounds",
+}
+
+
+def _settings_base(tab: str) -> str:
+    if tab not in _SETTINGS_PATH:
+        raise AppError("CNT005", f"잘못된 설정 탭: {tab}", status=400)
+    return _SETTINGS_PATH[tab]
+
+
+@router.get("/ui/settings/{tab}")
+async def ui_settings_get(tab: str) -> object:
+    """설정 조회 — admin 중계. sources·period는 /admin/config에서 추출."""
+    if tab in ("sources", "period"):
+        status, body = await admin_client.admin_request("GET", "/admin/config")
+        if status != 200 or not isinstance(body, dict):
+            raise AppError("CNT006", "설정 조회 실패(admin)", status=502)
+        return body.get(tab, {} if tab == "sources" else "")
+    status, body = await admin_client.admin_request("GET", _settings_base(tab))
+    if status != 200:
+        raise AppError("CNT006", "설정 조회 실패(admin)", status=502)
+    return body
+
+
+@router.post("/ui/settings/{tab}")
+async def ui_settings_create(tab: str, payload: dict[str, object]) -> object:
+    """항목 생성 — 키워드/템플릿/배경 추가(admin POST 중계)."""
+    if tab not in ("keywords", "templates", "backgrounds"):
+        raise AppError("CNT005", f"생성 불가 탭: {tab}", status=400)
+    status, body = await admin_client.admin_request("POST", _settings_base(tab), json=payload)
+    if status >= 400:
+        raise AppError("CNT006", f"설정 생성 실패(admin {status})", status=502)
+    return body
+
+
+@router.put("/ui/settings/{tab}/{item}")
+async def ui_settings_update(tab: str, item: str, payload: dict[str, object]) -> object:
+    """항목 변경 — 종목 토글·키워드·소스·기간·템플릿·배경(admin PUT 중계)."""
+    if tab == "period":
+        path = "/admin/settings/period"
+    elif tab == "sources":
+        path = f"/admin/sources/{item}"
+    elif tab in _SETTINGS_PATH:
+        path = f"{_SETTINGS_PATH[tab]}/{item}"
+    else:
+        raise AppError("CNT005", f"잘못된 설정 탭: {tab}", status=400)
+    status, body = await admin_client.admin_request("PUT", path, json=payload)
+    if status >= 400:
+        raise AppError("CNT006", f"설정 변경 실패(admin {status})", status=502)
+    return body
+
+
+@router.delete("/ui/settings/{tab}/{item}")
+async def ui_settings_delete(tab: str, item: str) -> object:
+    """항목 삭제 — 키워드/템플릿/배경(admin DELETE 중계)."""
+    if tab not in ("keywords", "templates", "backgrounds"):
+        raise AppError("CNT005", f"삭제 불가 탭: {tab}", status=400)
+    status, body = await admin_client.admin_request("DELETE", f"{_SETTINGS_PATH[tab]}/{item}")
+    if status >= 400:
+        raise AppError("CNT006", f"설정 삭제 실패(admin {status})", status=502)
+    return body

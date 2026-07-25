@@ -33,6 +33,8 @@ class Settings(BaseAppSettings):
     research_url: str = "http://research:8000"
     # admin(시나리오 템플릿 정의, ㊳) east-west 호출
     admin_url: str = "http://admin:8000"
+    # issue-detector(오늘 이슈 수, 대시보드 지표 ㊵) east-west 호출
+    issue_detector_url: str = "http://issue-detector:8000"
 
 
 settings = Settings()

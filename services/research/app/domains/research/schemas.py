@@ -64,3 +64,10 @@ class ArticleListResponse(BaseModel):
     """수집 기사 목록 — 최신순(published_at desc)."""
 
     items: list[ArticleItem] = Field(default_factory=list)
+
+
+class GraphStatsResponse(BaseModel):
+    """그래프 규모 — 대시보드 품질 지표(㊵)."""
+
+    nodes: int = 0
+    relations: int = 0

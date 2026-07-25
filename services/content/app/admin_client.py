@@ -34,3 +34,26 @@ async def fetch_template_def(template_id: int) -> dict[str, Any] | None:
     except httpx.HTTPError as exc:
         logger.warning("템플릿 조회 실패(기본형 폴백) id=%s: %s", template_id, exc)
         return None
+
+
+async def admin_request(
+    method: str, path: str, *, json: Any | None = None, params: dict[str, Any] | None = None
+) -> tuple[int, Any]:
+    """admin API 제네릭 중계(㊵ 설정 프록시) — HMAC 서명 후 그대로 전달. (status, body) 반환.
+
+    대시보드 설정 탭이 admin(㉝·㊳·㊴) CRUD를 content 경유로 호출(Database per Service).
+    실패(연결 등)는 (502, {}) — content가 admin_db를 직접 보지 않는다.
+    """
+    ts, sig = sign_internal(secret=settings.gateway_internal_secret, user_id="dashboard", path=path)
+    headers = {H_USER_ID: "dashboard", H_TIMESTAMP: ts, H_SIGNATURE: sig}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.request(
+                method, f"{settings.admin_url.rstrip('/')}{path}",
+                json=json, params=params, headers=headers,
+            )
+        body: Any = resp.json() if resp.content else None
+        return resp.status_code, body
+    except httpx.HTTPError as exc:
+        logger.warning("admin 중계 실패 %s %s: %s", method, path, exc)
+        return 502, {}
