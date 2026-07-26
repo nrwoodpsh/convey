@@ -105,7 +105,10 @@ def _decode(deserializer: AvroDeserializer, topic: str, raw: bytes) -> dict[str,
             loaded = json.loads(payload)
             return loaded if isinstance(loaded, dict) else {}
         return payload if isinstance(payload, dict) else {}
-    return unwrap(json.loads(raw.decode()))  # 레거시 JSON(봉투/날것) 하위호환
+    obj = json.loads(raw.decode())  # 레거시 JSON(봉투/날것) 또는 Debezium 아웃박스
+    if isinstance(obj, str):  # Debezium이 JSONB payload를 문자열로 이중 인코딩한 경우 방어(㊱ P3)
+        obj = json.loads(obj)
+    return unwrap(obj)
 
 
 async def consume_forever(

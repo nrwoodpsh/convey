@@ -5,7 +5,7 @@
 - **결정**: 이벤트 계층을 정석 스택으로 표준화(단계 P1~P5, 크로스커팅 도메인 `eventing`):
   - **P1 이벤트 봉투** — 모든 메시지에 `event_id·event_type·version·occurred_at·producer·payload`.
   - **P2 Avro + Confluent Schema Registry** — Avro 직렬화, 스키마 중앙 등록·호환성(진화) 검증. `aiokafka`→`confluent-kafka-python` 교체. **구현(20260726 완료)**: 봉투를 Avro 레코드(메타 필드형)로, payload는 봉투 Avro의 `string`(JSON) — 다형 도메인 데이터라 이벤트별 payload 필드형 `.avsc`는 후속. 동기 confluent를 `asyncio.to_thread`로 감싸 서비스 async 시그니처 유지(호출부 무변경). subject=`<topic>-value`, 전역 호환성 BACKWARD. 레거시 JSON 이중경로 하위호환.
-  - **P3 Transactional Outbox + Debezium CDC** — 발행부가 outbox 테이블 INSERT(같은 트랜잭션), Debezium이 Postgres WAL 캐치해 발행(유실 0). `wal_level=logical` + Kafka Connect.
+  - **P3 Transactional Outbox + Debezium CDC** — 발행부가 outbox 테이블 INSERT(같은 트랜잭션), Debezium이 Postgres WAL 캐치해 발행(유실 0). `wal_level=logical` + Kafka Connect. **구현(20260726, content 대표)**: `content.approve`가 job.status+outbox 원자 커밋(직접 publish 제거), debezium/connect PostgresConnector(pgoutput)+Outbox EventRouter(route.by.field=type→토픽, expand.json.payload). Debezium JSONB→문자열 이중 인코딩은 소비자 `_decode` 이중 디코딩으로 방어. 커넥터=REST 등록(`infra/debezium/*.json`, `_connect_configs`에 보존). 순수 프로듀서·타 서비스 아웃박스는 후속.
   - **P4 DLQ + 재시도 + 수동커밋** — 성공 후 커밋(at-least-once), 실패 RETRY_MAX 후 `*.dlq`.
   - **P5 Prometheus + Grafana + kafka-exporter** — consumer_lag·throughput·dlq_rate 대시보드.
 - **트레이드오프**: 정석은 무겁다 — 컨테이너 다수 추가(schema-registry·connect·debezium·prometheus·grafana·exporter), 라이브러리 교체, 발행/소비부 전면 변경. **규모엔 과하지만 학습이 목적이라 감수**(프로파일로 on/off). 앱 멱등(source_url)은 유지.

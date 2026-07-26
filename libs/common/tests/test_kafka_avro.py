@@ -31,3 +31,12 @@ def test_decode_legacy_raw_json() -> None:
     """봉투도 아닌 완전 레거시 날 JSON → 그대로."""
     raw = json.dumps({"ticker": "005930", "close": 71900}).encode()
     assert _decode(None, "t", raw) == {"ticker": "005930", "close": 71900}
+
+
+def test_decode_debezium_double_encoded() -> None:
+    """Debezium이 JSONB 봉투를 문자열로 이중 인코딩(㊱ P3) → 두 번 디코딩해 payload 추출."""
+    envelope = {"event_id": "x", "event_type": "content.approved", "version": 1,
+                "occurred_at": "n", "producer": "content",
+                "payload": {"job_id": 9999, "content_id": 9999}}
+    raw = json.dumps(json.dumps(envelope)).encode()  # 이중 인코딩
+    assert _decode(None, "content.approved", raw) == {"job_id": 9999, "content_id": 9999}

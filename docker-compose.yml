@@ -8,6 +8,9 @@ services:
   # ── 인프라 ────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine   # 사실 저장(시세·기사·출처). 벡터 임베딩은 POC 제외(ADR 0006)
+    # ㊱ P3 — Debezium CDC용 논리 복제(wal_level=logical). 아웃박스 WAL 캐치 전제.
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=4",
+              "-c", "max_replication_slots=4"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
@@ -75,6 +78,29 @@ services:
       interval: 10s
       timeout: 5s
       retries: 15
+
+  # Kafka Connect + Debezium (㊱ P3) — Postgres WAL(아웃박스)을 캐치해 토픽으로 발행(유실 0).
+  kafka-connect:
+    image: debezium/connect:3.0.0.Final
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: convey-connect
+      CONFIG_STORAGE_TOPIC: _connect_configs
+      OFFSET_STORAGE_TOPIC: _connect_offsets
+      STATUS_STORAGE_TOPIC: _connect_status
+      # 아웃박스 payload(봉투 JSON)를 그대로 값으로 — 소비자 이중경로(JSON)가 처리.
+      KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+    ports: ["${CONNECT_PORT:-8083}:8083"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8083/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest

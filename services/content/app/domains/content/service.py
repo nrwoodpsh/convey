@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.domains.content import media, repository
 from app.domains.content.models import GenerationJob
+from app.domains.content.outbox import publish_via_outbox
 from app.domains.content.schemas import (
     GenerateRequest,
     JobRes,
@@ -130,9 +131,6 @@ async def approve(session: AsyncSession, producer: KafkaProducer, job_id: int) -
         raise AppError("CNT002", "잡을 찾을 수 없습니다.", status=404)
     if job.status != JobStatus.READY.value:
         raise AppError("CNT003", "승인 가능한 상태가 아닙니다.", status=409)
-    job.status = JobStatus.APPROVED.value
-    await session.commit()
-    await session.refresh(job)
     # 발행 이벤트 강화(㊶ C1) — publishing이 mp4 경로·제목·출처를 그대로 쓰도록(출처 계승).
     mp4_path: str = ""
     sources: list[str] = []
@@ -148,12 +146,20 @@ async def approve(session: AsyncSession, producer: KafkaProducer, job_id: int) -
             if url and url not in seen:
                 seen.add(url)
                 sources.append(url)
-    await producer.publish(
-        settings.topic_approved,
-        {"job_id": job.id, "content_id": job.content_id, "mp4_path": mp4_path,
-         "title": job.topic, "sources": sources},
+    # ㊱ P3 — 직접 publish 대신 **같은 트랜잭션**에 아웃박스 INSERT. Debezium이 발행(유실 0).
+    job.status = JobStatus.APPROVED.value
+    publish_via_outbox(
+        session,
+        event_type=settings.topic_approved,
+        payload={"job_id": job.id, "content_id": job.content_id, "mp4_path": mp4_path,
+                 "title": job.topic, "sources": sources},
+        producer="content",
+        aggregate_type="content",
+        aggregate_id=str(job.id),
         key=str(job.id),
     )
+    await session.commit()  # job.status + outbox 원자 커밋
+    await session.refresh(job)
     return _to_res(job)
 
 
