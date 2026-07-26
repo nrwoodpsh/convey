@@ -133,9 +133,25 @@ async def approve(session: AsyncSession, producer: KafkaProducer, job_id: int) -
     job.status = JobStatus.APPROVED.value
     await session.commit()
     await session.refresh(job)
+    # 발행 이벤트 강화(㊶ C1) — publishing이 mp4 경로·제목·출처를 그대로 쓰도록(출처 계승).
+    mp4_path: str = ""
+    sources: list[str] = []
+    if job.content_id is not None:
+        content = await repository.get_content(session, job.content_id)
+        if content is not None:
+            mp4_path = content.mp4_path
+    script = await repository.get_script_by_job(session, job.id)
+    if script is not None:
+        seen: set[str] = set()
+        for c in script.citations:
+            url = str(c.get("source_url", ""))
+            if url and url not in seen:
+                seen.add(url)
+                sources.append(url)
     await producer.publish(
         settings.topic_approved,
-        {"job_id": job.id, "content_id": job.content_id},
+        {"job_id": job.id, "content_id": job.content_id, "mp4_path": mp4_path,
+         "title": job.topic, "sources": sources},
         key=str(job.id),
     )
     return _to_res(job)

@@ -35,6 +35,8 @@ class Settings(BaseAppSettings):
     admin_url: str = "http://admin:8000"
     # issue-detector(오늘 이슈 수, 대시보드 지표 ㊵) east-west 호출
     issue_detector_url: str = "http://issue-detector:8000"
+    # publishing(발행 상태, 대시보드 발행 버튼 ㊶) east-west 호출
+    publishing_url: str = "http://publishing:8000"
 
 
 settings = Settings()

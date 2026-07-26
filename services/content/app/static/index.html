@@ -163,6 +163,11 @@
   .evi .er{font-size:12px;color:var(--ink);margin:3px 0;padding-left:14px;position:relative}
   .evi .er::before{content:"▸";position:absolute;left:0;color:var(--mut)}
   .evi a{color:#6ca9e0;word-break:break-all}
+  /* 발행(㊶) */
+  .pub{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+  .pubrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
+  .pubrow.ok{color:#7fe0a0}
+  .pubrow a{color:#6ca9e0}
 </style>
 </head>
 <body>
@@ -450,6 +455,27 @@ async function playInto(vSel,mSel,cid,title,name){
   const meta=$(mSel); const ld=meta.querySelector(".loading"); if(ld) ld.outerHTML=segs;
   const jid=(items.find(i=>i.content_id===cid)||{}).job_id;  // 완성본 근거(㊵/AC3)
   if(jid!=null){meta.insertAdjacentHTML("beforeend",`<div class="evi" id="evi-${mSel.replace('#','')}"></div>`);renderEvidence(jid,`#evi-${mSel.replace('#','')}`);}
+  meta.insertAdjacentHTML("beforeend",`<div class="pub" id="pub-${cid}"></div>`);
+  renderPublish(cid,jid);
+}
+
+// ── 발행(㊶ C1) — 사람 승인 후 YouTube 업로드(기본 private). 자동 발행 금지 ──
+async function renderPublish(cid,jobId){
+  const box=$("#pub-"+cid); if(!box)return;
+  let p={status:"none"};
+  try{const r=await fetch(`/ui/publishing/${cid}`); if(r.ok) p=await r.json();}catch(e){}
+  const url=p.external_url;
+  if(url){box.innerHTML=`<div class="pubrow ok">✔ 발행됨 · <a href="${esc(url)}" target="_blank" rel="noopener">YouTube 링크</a></div>`;return;}
+  const st=p.status||"none";
+  const label={queued:"발행 대기중",uploading:"업로드 중…",failed:"발행 실패"}[st];
+  const canPublish=(st==="none"||st==="failed");
+  box.innerHTML=`<div class="pubrow">${label?`<span class="mut">${label}${p.error?" · "+esc(p.error).slice(0,60):""}</span> `:""}
+    ${canPublish?`<button class="act gold" id="pubbtn-${cid}">▶ YouTube 발행 (승인)</button>`:""}</div>`;
+  const b=$("#pubbtn-"+cid);
+  if(b&&jobId!=null)b.onclick=async()=>{b.disabled=true;b.textContent="발행 승인 중…";
+    try{const r=await fetch(`/ui/jobs/${jobId}/publish`,{method:"POST"});if(!r.ok)throw new Error(r.status);
+      toast("발행 승인됨 · YouTube 업로드 대기");setTimeout(()=>renderPublish(cid,jobId),1500);}
+    catch(e){toast("발행 승인 실패(ready 상태만): "+e.message,true);b.disabled=false;b.textContent="▶ YouTube 발행 (승인)";}};
 }
 
 // ── 탭2: 잡 카드 ──

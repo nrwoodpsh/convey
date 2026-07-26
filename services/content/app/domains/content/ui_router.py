@@ -208,6 +208,25 @@ async def ui_approve_scenario(
     return await service.approve_scenario(session, producer, job_id, background=background)
 
 
+@router.post("/ui/jobs/{job_id}/publish", response_model=JobRes)
+async def ui_publish(
+    job_id: int,
+    session: AsyncSession = Depends(get_session),
+    producer: KafkaProducer = Depends(get_producer),
+) -> JobRes:
+    """발행 승인(㊶ C1) — ready→approved → content.approved 발행 → publishing이 업로드.
+
+    가드레일: 사람이 이 버튼을 눌러야만 발행(자동 발행 금지). ready 상태만 통과.
+    """
+    return await service.approve(session, producer, job_id)
+
+
+@router.get("/ui/publishing/{content_id}")
+async def ui_publish_status(content_id: int) -> dict[str, object]:
+    """발행 상태(㊶) — publishing 중계. {status, external_url, error}."""
+    return await dash.fetch_publish_status(content_id)
+
+
 @router.get("/ui/contents/{content_id}/script", response_model=ScriptView)
 async def ui_script(
     content_id: int,

@@ -39,6 +39,24 @@ async def _fetch_issue_count() -> int:
         return 0
 
 
+async def fetch_publish_status(content_id: int) -> dict[str, Any]:
+    """publishing GET /publishing/{id}(HMAC) → 발행 상태. 없거나 실패 시 status=none."""
+    path = f"/publishing/{content_id}"
+    ts, sig = sign_internal(secret=settings.gateway_internal_secret, user_id="content", path=path)
+    headers = {H_USER_ID: "content", H_TIMESTAMP: ts, H_SIGNATURE: sig}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{settings.publishing_url.rstrip('/')}{path}", headers=headers
+            )
+        if resp.status_code != 200:
+            return {"status": "none"}
+        d: dict[str, Any] = resp.json()
+        return d
+    except httpx.HTTPError:
+        return {"status": "none"}
+
+
 async def gather_metrics(session: AsyncSession) -> dict[str, int]:
     """품질 지표(㊵/AC4) — 그래프·기사·이슈·완성 잡. 각 실패는 0."""
     by_status, _ = await repository.stats(session)

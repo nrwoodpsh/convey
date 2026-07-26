@@ -10,7 +10,8 @@ dependencies = [
     "asyncpg>=0.29",
     "alembic>=1.13",
     "common",
-    # "google-api-python-client>=2",  # YouTube 업로드 — 토큰 배선 시 활성화
+    "google-api-python-client>=2",  # YouTube Data API v3 업로드(㊶ C1)
+    "google-auth>=2",               # OAuth2 refresh-token 자격증명
 ]
 
 [build-system]
