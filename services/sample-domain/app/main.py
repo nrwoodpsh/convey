@@ -16,7 +16,7 @@ configure_logging(settings.log_level)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    producer = KafkaProducer(settings.kafka_bootstrap)
+    producer = KafkaProducer(settings.kafka_bootstrap, producer_name="sample-domain")
     await producer.start()
     app.state.producer = producer
     try:

@@ -19,7 +19,7 @@ configure_logging(settings.log_level)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    producer = KafkaProducer(settings.kafka_bootstrap)
+    producer = KafkaProducer(settings.kafka_bootstrap, producer_name="content")
     await producer.start()
     app.state.producer = producer
     # API + Kafka 소비 동거: 소비 루프를 백그라운드 태스크로 (갭#5 패턴)

@@ -19,7 +19,7 @@ configure_logging(settings.log_level)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    producer = KafkaProducer(settings.kafka_bootstrap)
+    producer = KafkaProducer(settings.kafka_bootstrap, producer_name="research")
     await producer.start()
     app.state.producer = producer
     user, _, pw = settings.neo4j_auth.partition("/")

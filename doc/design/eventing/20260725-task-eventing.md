@@ -10,7 +10,7 @@
 - **목표**: 정석 스택으로 이벤트 계층 표준화·신뢰성 확보 + 그 과정을 학습. ①봉투 ②Avro+Schema Registry ③Debezium 아웃박스 ④DLQ+수동커밋 ⑤Prometheus/Grafana.
 - **비목표**: 확장(파티션↑)은 트래픽 없으니 범위 밖. 앱 멱등(source_url)은 유지(방어 유지).
 - **Acceptance Criteria**(Phase별):
-  - [ ] AC1(P1): 모든 발행 메시지가 **봉투**(`event_id·event_type·version·occurred_at·producer·payload`). **검증: kafka-ui에서 메시지에 메타 존재 + 단위(봉투 생성).**
+  - [x] AC1(P1): 모든 발행 메시지가 **봉투**(`event_id·event_type·version·occurred_at·producer·payload`). **검증: kafka-ui에서 메시지에 메타 존재 + 단위(봉투 생성).** — 완료(`envelope.py` wrap/unwrap, `KafkaProducer.publish` 봉투 감싸기·`consume_forever` 자동 언랩, 발행부 7서비스 producer_name 배선). 라이브: on-the-wire 봉투(event_type·version·producer·event_id UUID·payload) + 소비 핸들러 payload만 수신 + 레거시 raw 하위호환. 전 kafka 서비스 재빌드 후 소비 에러 0.
   - [ ] AC2(P2): 메시지가 **Avro**로 직렬화·**Schema Registry**에 스키마 등록, 호환성 검증 동작. **검증: registry에 subject 조회·호환성 규칙 위반 필드변경 거부.**
   - [ ] AC3(P3): 발행이 **outbox 테이블 INSERT(같은 트랜잭션)** + **Debezium**이 WAL 캐치해 발행. **검증: 서비스는 직접 publish 안 함, outbox 행 → 토픽 도달. commit~발행 유실 0(크래시 재현).**
   - [ ] AC4(P4): 소비 **수동커밋** + 실패 **RETRY_MAX 재시도 후 DLQ**(`*.dlq`). **검증: 처리 실패 메시지가 재시도 후 dlq 토픽으로, offset은 성공분만 전진.**
@@ -57,4 +57,5 @@
 ## 8. History
 | 일시 | 단계 | 내용 |
 |:---|:---|:---|
+| 20260726 | /builder(P1) | **㊱ P1 이벤트 봉투**. `libs/common/common/envelope.py`(신규): `EventEnvelope`·`wrap`(event_id UUID·occurred_at·version·producer)·`unwrap`(봉투→payload, 레거시 raw 하위호환)·`is_envelope`. `kafka.py`: `KafkaProducer(producer_name=)` 봉투 감싸 발행·`consume_forever` 자동 언랩(소비 핸들러 무변경). 발행부 7서비스 producer_name 배선(research·market-feed·news-feed·issue-detector·content·video-assembly·sample-domain). **검증**: 단위 4(wrap 메타·unwrap payload·레거시 raw·event_id 유일)·mypy strict 0·계약 0. 실스택: on-the-wire 봉투 확인(content 발행→raw 컨슈머)·소비 언랩(핸들러 payload만)·전 kafka 서비스 재빌드 후 소비 에러 0. **일관성**: 봉투는 전 서비스 동시 적용 필요(재빌드된 발행자 봉투를 구 소비자가 못 읽음) → 전 kafka 서비스 재빌드. **범위**: P2(Avro/Registry)·P3(Debezium 아웃박스)·P4(DLQ/수동커밋)·P5(모니터링)는 후속 라운드(각 인프라 추가). |
 | 20260725 | /design | Kafka 정석 스택(학습). P1 봉투·P2 Avro+Schema Registry·P3 Debezium 아웃박스·P4 DLQ+수동커밋·P5 Prometheus/Grafana. 결정(사용자): Avro+Confluent Registry·Debezium CDC·Prometheus/Grafana·단계화. 사각지대: aiokafka→confluent-kafka 교체, Debezium 인프라(wal_level=logical·Connect), 발행/소비부 전면 변경, 로컬 컨테이너 다수. 목적=정석 학습(트래픽 대비 아님). 계약 mypy 통과. ADR 0019. 신규 도메인 eventing. |

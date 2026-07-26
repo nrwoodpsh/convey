@@ -23,7 +23,7 @@ logger = logging.getLogger("market-feed")
 async def run() -> None:
     symbols = [s.strip() for s in settings.symbols.split(",") if s.strip()]
     client = KrxMarketClient(settings.lookback_days)
-    producer = KafkaProducer(settings.kafka_bootstrap)
+    producer = KafkaProducer(settings.kafka_bootstrap, producer_name="market-feed")
     await producer.start()
     logger.info(
         "market-feed 시작 symbols=%s interval=%ss", symbols, settings.poll_interval_seconds

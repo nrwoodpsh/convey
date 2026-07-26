@@ -1,4 +1,9 @@
-"""aiokafka 기반 발행/소비 헬퍼 (JSON 직렬화)."""
+"""aiokafka 기반 발행/소비 헬퍼 (JSON 직렬화) — 이벤트 봉투(㊱ P1) 표준.
+
+발행: payload를 EventEnvelope로 감싸(event_id·type·version·occurred_at·producer) JSON 직렬화.
+소비: consume_forever가 봉투를 자동 언랩해 핸들러엔 payload(도메인 데이터)만 넘긴다(핸들러 무변경).
+하위호환: 레거시 날 JSON 메시지도 unwrap이 그대로 통과시킨다(전환·재생 안전).
+"""
 from __future__ import annotations
 
 import json
@@ -8,14 +13,17 @@ from typing import Any
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
+from common.envelope import unwrap, wrap
+
 logger = logging.getLogger(__name__)
 
 
 class KafkaProducer:
-    """서비스 수명주기에 붙여 쓰는 프로듀서 래퍼."""
+    """서비스 수명주기에 붙여 쓰는 프로듀서 래퍼. producer_name은 봉투의 발행자 메타."""
 
-    def __init__(self, bootstrap: str) -> None:
+    def __init__(self, bootstrap: str, producer_name: str = "unknown") -> None:
         self._bootstrap = bootstrap
+        self._name = producer_name
         self._producer: AIOKafkaProducer | None = None
 
     async def start(self) -> None:
@@ -32,9 +40,11 @@ class KafkaProducer:
             await self._producer.stop()
 
     async def publish(self, topic: str, value: dict[str, Any], key: str | None = None) -> None:
+        """payload를 봉투로 감싸 발행(㊱ P1). event_type=topic, Kafka 파티션 키는 그대로."""
         assert self._producer is not None, "producer not started"
-        await self._producer.send_and_wait(topic, value=value, key=key)
-        logger.info("published topic=%s key=%s", topic, key)
+        envelope = wrap(event_type=topic, payload=value, producer=self._name, key=key)
+        await self._producer.send_and_wait(topic, value=envelope, key=key)
+        logger.info("published topic=%s key=%s event_id=%s", topic, key, envelope["event_id"])
 
 
 async def consume_forever(
@@ -58,7 +68,7 @@ async def consume_forever(
     try:
         async for msg in consumer:
             try:
-                await handler(msg.value)
+                await handler(unwrap(msg.value))  # 봉투 언랩(㊱ P1) — 핸들러엔 payload만
             except Exception:  # noqa: BLE001 — 워커는 한 메시지 실패로 죽지 않음
                 logger.exception("handler failed offset=%s", msg.offset)
     finally:

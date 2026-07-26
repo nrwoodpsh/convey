@@ -274,7 +274,7 @@ async def handle_assemble(event: dict[str, Any], producer: KafkaProducer) -> Non
 
 
 async def run() -> None:
-    producer = KafkaProducer(settings.kafka_bootstrap)
+    producer = KafkaProducer(settings.kafka_bootstrap, producer_name="video-assembly")
     await producer.start()
     logger.info("video-assembly 시작 — media.assemble 대기 (render → compose → content.assembled)")
 

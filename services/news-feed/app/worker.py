@@ -99,7 +99,7 @@ async def _macro_loop(producer: KafkaProducer) -> None:
 
 
 async def run() -> None:
-    producer = KafkaProducer(settings.kafka_bootstrap)
+    producer = KafkaProducer(settings.kafka_bootstrap, producer_name="news-feed")
     await producer.start()
     logger.info("news-feed 시작 (뉴스·공시 + 거시 동시 수집)")
     try:

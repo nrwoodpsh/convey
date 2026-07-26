@@ -59,7 +59,7 @@ async def run_emitter(ranker: RollingRanker) -> None:
 
     score 임계 + 상위 K + 종목 쿨다운으로 무의미·중복 양산을 막는다.
     """
-    producer = KafkaProducer(settings.kafka_bootstrap)
+    producer = KafkaProducer(settings.kafka_bootstrap, producer_name="issue-detector")
     await producer.start()
     cooldown: dict[str, datetime] = {}
     logger.info(
