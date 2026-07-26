@@ -23,3 +23,5 @@ class BaseAppSettings(BaseSettings):
 
     # Kafka
     kafka_bootstrap: str = "kafka:9092"
+    # Schema Registry (㊱ P2 — Avro 스키마 등록·호환성)
+    schema_registry_url: str = "http://schema-registry:8081"

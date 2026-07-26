@@ -59,11 +59,30 @@ services:
       timeout: 5s
       retries: 15
 
+  # Confluent Schema Registry (㊱ P2) — Avro 스키마 등록·호환성 검증. 우리 KRaft Kafka에 붙는다.
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.7.0
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    ports: ["${SCHEMA_REGISTRY_PORT:-8085}:8081"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/subjects || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      # Schema Registry 연동(㊱ P2) — kafka-ui에서 Avro 메시지·스키마 조회
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
       DYNAMIC_CONFIG_ENABLED: "true"
     ports: ["${KAFKAUI_PORT:-8090}:8080"]
     depends_on:
@@ -100,6 +119,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       kafka: {condition: service_healthy}
+      schema-registry: {condition: service_healthy}
 
   llm-inference:
     build: {context: ., dockerfile: services/llm-inference/Dockerfile}
@@ -123,6 +143,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       kafka: {condition: service_healthy}
+      schema-registry: {condition: service_healthy}
       neo4j: {condition: service_healthy}
 
   # 운영자 설정 — 종목·키워드·소스·기간 + 종목 마스터. 대시보드 쓰기·워커 API 읽기 (ADR 0016, ㉝)
@@ -140,6 +161,7 @@ services:
     <<: *python-env
     depends_on:
       kafka: {condition: service_healthy}
+      schema-registry: {condition: service_healthy}
 
   # 이슈 종목 선별 — 스트림 집계 랭킹(워커) + 조회 API. 알파2 (라운드②)
   issue-detector:
@@ -147,6 +169,7 @@ services:
     <<: *python-env
     depends_on:
       kafka: {condition: service_healthy}
+      schema-registry: {condition: service_healthy}
 
   # 정확 차트·수치 렌더 + ffmpeg 합성 → mp4. 알파3 (라운드④)
   video-assembly:
@@ -158,6 +181,7 @@ services:
       - media:/data/media   # mp4 산출(쓰기) → content·publishing 공유
     depends_on:
       kafka: {condition: service_healthy}
+      schema-registry: {condition: service_healthy}
 
   content:
     build: {context: ., dockerfile: services/content/Dockerfile}
@@ -170,6 +194,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       kafka: {condition: service_healthy}
+      schema-registry: {condition: service_healthy}
       agent: {condition: service_started}
 
   # 발행 — content.approved → YouTube 업로드(멱등·재시도) + 상태 조회. 알파4 (라운드⑤)
@@ -183,6 +208,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       kafka: {condition: service_healthy}
+      schema-registry: {condition: service_healthy}
 
   # 외부 연동 워커(예: KIS) — HTTP 없음, 게이트웨이 뒤 아님, Kafka로만 결합
   market-feed:
@@ -190,6 +216,7 @@ services:
     <<: *python-env
     depends_on:
       kafka: {condition: service_healthy}
+      schema-registry: {condition: service_healthy}
 
 volumes:
   pgdata:
