@@ -133,6 +133,36 @@
     padding:11px 16px;font-size:13px;border-radius:8px;box-shadow:0 10px 28px #000a;animation:tin .2s}
   .t.err{border-left-color:var(--red)}
   @keyframes tin{from{transform:translateX(20px);opacity:0}}
+  /* 품질 지표(㊵) */
+  .metrics{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .metric{flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .metric .v{font-size:24px;font-weight:800;color:var(--gold);line-height:1.1}
+  .metric .l{font-size:11px;letter-spacing:.5px;color:var(--mut);margin-top:4px}
+  /* 설정 서브탭·폼(㊵) */
+  .subtabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .subtab{cursor:pointer;font-family:inherit;font-size:12px;letter-spacing:.5px;color:var(--mut);background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;padding:7px 13px}
+  .subtab:hover{color:var(--ink)}
+  .subtab.on{color:#241a05;background:var(--gold);border-color:var(--gold);font-weight:700}
+  .setrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .setrow:last-child{border-bottom:none}
+  .setrow .grow{flex:1;min-width:0}
+  .setrow .mut{color:var(--mut);font-size:11px}
+  .setrow input[type=text],.setrow input[type=number],.setrow select{font-family:inherit;font-size:13px;color:var(--ink);
+    background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+  .setrow input[type=text]{min-width:120px}
+  .sw{cursor:pointer;font-size:11px;padding:5px 11px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--mut)}
+  .sw.on{background:#123c1d;border-color:#2a6b3d;color:#7fe0a0}
+  .btnx{cursor:pointer;font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--red)}
+  .addbar{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap}
+  .setlist{max-height:440px;overflow:auto}
+  .setgrp{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  /* 근거 패널(㊵/AC3) */
+  .evi{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+  .evi h4{margin:0 0 8px;font-size:11px;letter-spacing:1px;color:var(--gold);text-transform:uppercase}
+  .evi .er{font-size:12px;color:var(--ink);margin:3px 0;padding-left:14px;position:relative}
+  .evi .er::before{content:"▸";position:absolute;left:0;color:var(--mut)}
+  .evi a{color:#6ca9e0;word-break:break-all}
 </style>
 </head>
 <body>
@@ -142,9 +172,13 @@
     <span class="tag">운영 콘솔</span>
   </header>
 
+  <!-- 품질 지표(㊵/AC4) — 파이프라인 상태 한눈에 -->
+  <div class="metrics" id="metrics"></div>
+
   <div class="maintabs">
     <button class="maintab on" data-tab="make">오늘자 기사</button>
     <button class="maintab" data-tab="shorts">생성쇼츠</button>
+    <button class="maintab" data-tab="settings">설정</button>
   </div>
 
   <!-- ═══ 탭1: 오늘자 기사 (마법사) ═══ -->
@@ -222,6 +256,22 @@
       <div class="grid" id="grid"><div class="empty">불러오는 중…</div></div>
     </section>
   </div>
+
+  <!-- ═══ 탭3: 설정 (㊵/AC2 — admin 중계 CRUD) ═══ -->
+  <div id="tab-settings" class="hidden">
+    <div class="subtabs" id="subtabs">
+      <button class="subtab on" data-s="stocks">종목</button>
+      <button class="subtab" data-s="keywords">키워드</button>
+      <button class="subtab" data-s="sources">소스</button>
+      <button class="subtab" data-s="period">기간</button>
+      <button class="subtab" data-s="templates">시나리오 템플릿</button>
+      <button class="subtab" data-s="backgrounds">배경 자산</button>
+    </div>
+    <section class="panel">
+      <h2 id="setTitle">설정</h2>
+      <div id="setArea"><div class="loading">불러오는 중…</div></div>
+    </section>
+  </div>
 </div>
 <div id="toast"></div>
 
@@ -247,8 +297,21 @@ $$(".maintab").forEach(b=>b.onclick=()=>{
   const t=b.dataset.tab;
   $("#tab-make").classList.toggle("hidden",t!=="make");
   $("#tab-shorts").classList.toggle("hidden",t!=="shorts");
+  $("#tab-settings").classList.toggle("hidden",t!=="settings");
+  if(t==="make") loadMetrics();
   if(t==="shorts") loadJobs();
+  if(t==="settings") loadSettings(setTab);
 });
+
+// ── 품질 지표(㊵/AC4) ──
+async function loadMetrics(){
+  let m={};
+  try{const r=await fetch("/ui/metrics"); if(r.ok) m=await r.json();}catch(e){return;}
+  const cards=[["graph_nodes","그래프 노드"],["graph_relations","그래프 관계"],
+    ["articles_today","오늘 기사"],["issues_selected","오늘 이슈"],["jobs_ready","완성 쇼츠"]];
+  $("#metrics").innerHTML=cards.map(([k,l])=>
+    `<div class="metric"><div class="v">${(m[k]??0).toLocaleString()}</div><div class="l">${l}</div></div>`).join("");
+}
 
 // ── 마법사 스텝 표시 ──
 function goStep(n){
@@ -316,10 +379,24 @@ async function showEditor(){
      <textarea data-i="${i}" rows="2">${esc(x.text)}</textarea></div>`).join("")+
     `<div class="row"><button class="ghost" data-back="2">← 템플릿</button>
      <button class="act" id="saveBtn">저장</button>
-     <button class="act gold" id="toBgBtn">배경 선택 →</button></div>`;
+     <button class="act gold" id="toBgBtn">배경 선택 →</button></div>`+
+    `<div class="evi" id="eviBox"></div>`;
   $$("#editArea [data-back]").forEach(b=>b.onclick=()=>goStep(+b.dataset.back));
   $("#saveBtn").onclick=()=>saveScript(false);
   $("#toBgBtn").onclick=()=>saveScript(true);
+  renderEvidence(wz.job,"#eviBox");
+}
+
+// ── 근거 뷰(㊵/AC3) — 관계·출처·수치(신뢰 가시화, 알파①) ──
+async function renderEvidence(jobId,sel){
+  const box=$(sel); if(!box||jobId==null)return;
+  let ev={relations:[],sources:[],prices:[]};
+  try{const r=await fetch(`/ui/jobs/${jobId}/evidence`); if(r.ok) ev=await r.json();}catch(e){return;}
+  if(!ev.relations.length&&!ev.sources.length&&!ev.prices.length){box.innerHTML="";return;}
+  const grp=(title,arr,asLink)=>arr.length?`<h4>${title}</h4>`+arr.map(x=>
+    `<div class="er">${asLink?`<a href="${esc(x)}" target="_blank" rel="noopener">${esc(host(x))}</a>`:esc(x)}</div>`).join(""):"";
+  box.innerHTML=`<h4 style="color:var(--gold)">근거 (출처·관계·수치)</h4>`+
+    grp("수치",ev.prices,false)+grp("관계(그래프)",ev.relations,false)+grp("출처",ev.sources,true);
 }
 async function saveScript(advance){
   const secs=[...$$("#editArea textarea")].map(t=>({kind:editSections[+t.dataset.i].kind, text:t.value}));
@@ -371,6 +448,8 @@ async function playInto(vSel,mSel,cid,title,name){
   try{const r=await fetch(`/ui/contents/${cid}/script`); if(r.ok) s=await r.json();}catch(e){}
   const segs=(s.sections||[]).map(x=>`<div class="seg2"><span class="k">${esc(KIND_LABEL[x.kind]||x.kind)}</span><span class="tx">${esc(x.text)}</span></div>`).join("");
   const meta=$(mSel); const ld=meta.querySelector(".loading"); if(ld) ld.outerHTML=segs;
+  const jid=(items.find(i=>i.content_id===cid)||{}).job_id;  // 완성본 근거(㊵/AC3)
+  if(jid!=null){meta.insertAdjacentHTML("beforeend",`<div class="evi" id="evi-${mSel.replace('#','')}"></div>`);renderEvidence(jid,`#evi-${mSel.replace('#','')}`);}
 }
 
 // ── 탭2: 잡 카드 ──
@@ -413,6 +492,132 @@ function renderJobs(){
 $("#filt").onclick=e=>{const b=e.target.closest(".f");if(!b)return;filter=b.dataset.f;
   $$("#filt .f").forEach(f=>f.classList.toggle("on",f===b));renderJobs();};
 
+// ── 탭3: 설정(㊵/AC2 — admin 중계 CRUD) ──
+let setTab="stocks";
+const SET_TITLE={stocks:"관심 종목",keywords:"키워드",sources:"수집 소스",period:"수집 기간",
+  templates:"시나리오 템플릿",backgrounds:"배경 자산"};
+$("#subtabs").onclick=e=>{const b=e.target.closest(".subtab");if(!b)return;
+  setTab=b.dataset.s; $$("#subtabs .subtab").forEach(x=>x.classList.toggle("on",x===b));
+  loadSettings(setTab);};
+async function sReq(method,path,body){
+  const o={method,headers:{"Content-Type":"application/json"}};
+  if(body!==undefined)o.body=JSON.stringify(body);
+  const r=await fetch("/ui/settings"+path,o);
+  if(!r.ok)throw new Error(r.status);
+  return r.status===200?r.json():null;
+}
+async function loadSettings(tab){
+  $("#setTitle").textContent=SET_TITLE[tab]||"설정";
+  const area=$("#setArea"); area.innerHTML=`<div class="loading">불러오는 중…</div>`;
+  let data;
+  try{data=await (await fetch("/ui/settings/"+tab)).json();}
+  catch(e){area.innerHTML=`<div class="empty">설정 조회 실패</div>`;return;}
+  ({stocks:renderStocks,keywords:renderKeywords,sources:renderSources,period:renderPeriod,
+    templates:renderTemplates,backgrounds:renderBackgrounds}[tab])(data);
+}
+function swBtn(on){return `<button class="sw${on?" on":""}">${on?"ON":"OFF"}</button>`;}
+
+function renderStocks(rows){
+  const area=$("#setArea");
+  area.innerHTML=`<div class="mut" style="margin-bottom:8px">체크된 종목만 수집·이슈 대상. (${rows.length}종)</div>
+    <input type="text" id="stkq" placeholder="종목명·코드 검색" style="width:100%;margin-bottom:10px">
+    <div class="setlist" id="stklist"></div>`;
+  const draw=q=>{
+    $("#stklist").innerHTML=rows.filter(s=>!q||s.name.includes(q)||s.ticker.includes(q)).map(s=>
+      `<div class="setrow"><span class="grow">${esc(s.name)} <span class="mut">${s.ticker} · ${esc(s.sector||"")}</span></span>
+       <span data-tk="${s.ticker}" data-on="${s.enabled?1:0}">${swBtn(s.enabled)}</span></div>`).join("")||`<div class="empty">없음</div>`;
+    $$("#stklist .sw").forEach(b=>b.onclick=async()=>{const sp=b.parentElement,tk=sp.dataset.tk,on=sp.dataset.on==="1";
+      try{await sReq("PUT","/stocks/"+tk,{enabled:!on});const s=rows.find(x=>x.ticker===tk);s.enabled=!on;draw($("#stkq").value.trim());toast(`${s.name} ${!on?"ON":"OFF"}`);}catch(e){toast("실패",true);}});
+  };
+  draw(""); $("#stkq").oninput=e=>draw(e.target.value.trim());
+}
+function renderKeywords(rows){
+  const area=$("#setArea");
+  area.innerHTML=`<div class="addbar"><input type="text" id="kwnew" placeholder="키워드 추가(예: 금리)">
+    <button class="act" id="kwadd">추가</button></div><div class="setlist" id="kwlist"></div>`;
+  const draw=()=>{
+    $("#kwlist").innerHTML=rows.map(k=>
+      `<div class="setrow"><span class="grow">${esc(k.term)}</span>
+       <span data-id="${k.id}" data-on="${k.enabled?1:0}">${swBtn(k.enabled)}</span>
+       <button class="btnx" data-del="${k.id}">삭제</button></div>`).join("")||`<div class="empty">키워드 없음</div>`;
+    $$("#kwlist .sw").forEach(b=>b.onclick=async()=>{const sp=b.parentElement,id=+sp.dataset.id,on=sp.dataset.on==="1";
+      try{await sReq("PUT","/keywords/"+id,{enabled:!on});const k=rows.find(x=>x.id===id);k.enabled=!on;draw();}catch(e){toast("실패",true);}});
+    $$("#kwlist [data-del]").forEach(b=>b.onclick=async()=>{const id=+b.dataset.del;
+      try{await sReq("DELETE","/keywords/"+id);const i=rows.findIndex(x=>x.id===id);rows.splice(i,1);draw();toast("삭제됨");}catch(e){toast("실패",true);}});
+  };
+  draw();
+  $("#kwadd").onclick=async()=>{const t=$("#kwnew").value.trim();if(!t)return;
+    try{const k=await sReq("POST","/keywords",{term:t});rows.push(k);$("#kwnew").value="";draw();toast("추가됨");}catch(e){toast("실패(중복?)",true);}};
+}
+function renderSources(obj){
+  const names={naver:"네이버 금융",rss:"RSS 피드",dart:"DART 공시"};
+  $("#setArea").innerHTML=`<div class="setlist">`+Object.keys(names).map(n=>
+    `<div class="setrow"><span class="grow">${names[n]} <span class="mut">${n}</span></span>
+     <span data-nm="${n}" data-on="${obj[n]?1:0}">${swBtn(!!obj[n])}</span></div>`).join("")+`</div>`;
+  $$("#setArea .sw").forEach(b=>b.onclick=async()=>{const sp=b.parentElement,nm=sp.dataset.nm,on=sp.dataset.on==="1";
+    try{await sReq("PUT","/sources/"+nm,{enabled:!on});sp.dataset.on=!on?"1":"0";b.classList.toggle("on",!on);b.textContent=!on?"ON":"OFF";toast(`${nm} ${!on?"ON":"OFF"}`);}catch(e){toast("실패",true);}});
+}
+function renderPeriod(cur){
+  const opts=[["1w","최근 1주"],["1m","최근 1개월"],["3m","최근 3개월"]];
+  $("#setArea").innerHTML=`<div class="setrow"><span class="grow">수집 검색 기간</span>
+    <select id="perSel">${opts.map(([v,l])=>`<option value="${v}"${v===cur?" selected":""}>${l}</option>`).join("")}</select></div>`;
+  $("#perSel").onchange=async e=>{try{await sReq("PUT","/period/_",{period:e.target.value});toast("기간 저장됨");}catch(err){toast("실패",true);}};
+}
+function tplBody(el){return {name:el.querySelector("[data-f=name]").value,description:el.querySelector("[data-f=desc]").value,
+  n_facts:+el.querySelector("[data-f=nf]").value,n_relations:+el.querySelector("[data-f=nr]").value,
+  use_macro:el.querySelector("[data-f=mac]").checked,use_closing:el.querySelector("[data-f=clo]").checked,
+  hook_tone:el.querySelector("[data-f=hook]").value,enabled:el.querySelector("[data-f=en]").checked};}
+function tplCard(t){return `<div class="setrow" data-id="${t.id??""}" style="flex-wrap:wrap;gap:8px">
+  <input type="text" data-f="name" value="${esc(t.name||"")}" placeholder="이름">
+  <input type="text" data-f="desc" value="${esc(t.description||"")}" placeholder="설명">
+  <span class="mut">사실</span><input type="number" data-f="nf" value="${t.n_facts??3}" style="width:52px">
+  <span class="mut">관계</span><input type="number" data-f="nr" value="${t.n_relations??2}" style="width:52px">
+  <label class="mut"><input type="checkbox" data-f="mac" ${t.use_macro?"checked":""}>거시</label>
+  <label class="mut"><input type="checkbox" data-f="clo" ${t.use_closing?"checked":""}>마무리</label>
+  <input type="text" data-f="hook" value="${esc(t.hook_tone||"")}" placeholder="훅 톤" style="min-width:130px">
+  <label class="mut"><input type="checkbox" data-f="en" ${t.enabled!==false?"checked":""}>활성</label>
+  <button class="act" data-save>${t.id?"저장":"추가"}</button>
+  ${t.id?`<button class="btnx" data-del="${t.id}">삭제</button>`:""}</div>`;}
+function renderTemplates(rows){
+  $("#setArea").innerHTML=`<div class="mut" style="margin-bottom:8px">대본 형식 노브(구조·톤만 — 수치·관계는 근거에서).</div>
+    <div class="setlist" id="tpllist">${rows.map(tplCard).join("")}</div>
+    <div style="margin-top:14px"><div class="mut" style="margin-bottom:6px">새 템플릿</div>${tplCard({})}</div>`;
+  const bind=el=>{
+    const sv=el.querySelector("[data-save]"),id=el.dataset.id;
+    sv.onclick=async()=>{try{if(id){await sReq("PUT","/templates/"+id,tplBody(el));toast("저장됨");}
+      else{await sReq("POST","/templates",tplBody(el));toast("추가됨");loadSettings("templates");}}catch(e){toast("실패",true);}};
+    const del=el.querySelector("[data-del]");
+    if(del)del.onclick=async()=>{try{await sReq("DELETE","/templates/"+del.dataset.del);toast("삭제됨");loadSettings("templates");}catch(e){toast("실패",true);}};
+  };
+  $$("#setArea .setrow").forEach(bind);
+}
+function bgBody(el){return {name:el.querySelector("[data-f=name]").value,
+  tags:el.querySelector("[data-f=tags]").value.split(",").map(s=>s.trim()).filter(Boolean),
+  path:el.querySelector("[data-f=path]").value,kind:el.querySelector("[data-f=kind]").value,
+  license:el.querySelector("[data-f=lic]").value,enabled:el.querySelector("[data-f=en]").checked};}
+function bgCard(b){return `<div class="setrow" data-id="${b.id??""}" style="flex-wrap:wrap;gap:8px">
+  <input type="text" data-f="name" value="${esc(b.name||"")}" placeholder="이름">
+  <input type="text" data-f="tags" value="${esc((b.tags||[]).join(", "))}" placeholder="태그(자동차, 반도체)">
+  <input type="text" data-f="path" value="${esc(b.path||"")}" placeholder="/data/media/파일" style="min-width:170px">
+  <select data-f="kind"><option value="image"${b.kind!=="video"?" selected":""}>이미지</option><option value="video"${b.kind==="video"?" selected":""}>영상</option></select>
+  <input type="text" data-f="lic" value="${esc(b.license||"")}" placeholder="라이선스" style="min-width:90px">
+  <label class="mut"><input type="checkbox" data-f="en" ${b.enabled!==false?"checked":""}>활성</label>
+  <button class="act" data-save>${b.id?"저장":"등록"}</button>
+  ${b.id?`<button class="btnx" data-del="${b.id}">삭제</button>`:""}</div>`;}
+function renderBackgrounds(rows){
+  $("#setArea").innerHTML=`<div class="mut" style="margin-bottom:8px">배경 파일은 공유 볼륨(/data/media)에 두고 경로·태그를 등록. 종목 섹터/이름 태그로 매칭.</div>
+    <div class="setlist">${rows.map(bgCard).join("")}</div>
+    <div style="margin-top:14px"><div class="mut" style="margin-bottom:6px">새 배경 등록</div>${bgCard({})}</div>`;
+  $$("#setArea .setrow").forEach(el=>{
+    const id=el.dataset.id;
+    el.querySelector("[data-save]").onclick=async()=>{try{if(id){await sReq("PUT","/backgrounds/"+id,bgBody(el));toast("저장됨");}
+      else{await sReq("POST","/backgrounds",bgBody(el));toast("등록됨");loadSettings("backgrounds");}}catch(e){toast("실패",true);}};
+    const del=el.querySelector("[data-del]");
+    if(del)del.onclick=async()=>{try{await sReq("DELETE","/backgrounds/"+del.dataset.del);toast("삭제됨");loadSettings("backgrounds");}catch(e){toast("실패",true);}};
+  });
+}
+
+loadMetrics();
 loadArticles();
 loadJobs();
 </script>
