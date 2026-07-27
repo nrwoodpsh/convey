@@ -18,7 +18,12 @@ import json
 import logging
 import os
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 from typing import Any
+
+RETRY_MAX = 3          # 소비 실패 재시도 횟수(초과 시 DLQ) — 계약(api-contract-eventing)
+DLQ_SUFFIX = ".dlq"    # DLQ 토픽 접미사(예: research.ingested.dlq)
+_RETRY_BACKOFF = 0.5   # 재시도 간 백오프(초, 선형)
 
 from confluent_kafka import Consumer, Producer
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -111,27 +116,40 @@ def _decode(deserializer: AvroDeserializer, topic: str, raw: bytes) -> dict[str,
     return unwrap(obj)
 
 
-async def consume_forever(
+def _commit_sync(consumer: Consumer, msg: Any) -> None:
+    """수동 커밋(동기) — 처리 성공/DLQ 후 offset 전진. to_thread로 격리 호출."""
+    consumer.commit(message=msg, asynchronous=False)
+
+
+async def consume_reliable(
     *,
     topic: str,
     group_id: str,
     bootstrap: str,
     handler: Callable[[dict[str, Any]], Awaitable[None]],
+    retry_max: int = RETRY_MAX,
+    dlq_suffix: str = DLQ_SUFFIX,
     schema_registry_url: str = "",
 ) -> None:
-    """토픽을 무한 소비하며 handler 호출(payload만). confluent-kafka poll을 스레드로 격리."""
+    """수동커밋 소비(㊱ P4, at-least-once) — 성공/DLQ 후에만 offset 커밋.
+
+    실패는 retry_max회 재시도(선형 백오프) 후 `{topic}{dlq_suffix}`로 발행하고 offset 전진
+    (poison 메시지가 파티션을 막지 않게). 디코딩 실패도 DLQ. 핸들러엔 payload(도메인)만.
+    """
+    reg_url = schema_registry_url or _registry_url()
     consumer = Consumer(
         {
             "bootstrap.servers": bootstrap,
             "group.id": group_id,
             "auto.offset.reset": "earliest",
-            "enable.auto.commit": True,  # P4에서 수동커밋+DLQ로 교체
+            "enable.auto.commit": False,  # 수동커밋 — 처리 성공해야 offset 전진
         }
     )
-    registry = SchemaRegistryClient({"url": schema_registry_url or _registry_url()})
-    deserializer = AvroDeserializer(registry, ENVELOPE_AVRO_SCHEMA)
+    deserializer = AvroDeserializer(SchemaRegistryClient({"url": reg_url}), ENVELOPE_AVRO_SCHEMA)
+    dlq = KafkaProducer(bootstrap, producer_name=f"{group_id}-dlq", schema_registry_url=reg_url)
+    await dlq.start()
     consumer.subscribe([topic])
-    logger.info("consuming topic=%s group=%s", topic, group_id)
+    logger.info("consuming(reliable) topic=%s group=%s retry_max=%s", topic, group_id, retry_max)
     try:
         while True:
             msg = await asyncio.to_thread(consumer.poll, 1.0)
@@ -142,12 +160,78 @@ async def consume_forever(
                 continue
             raw = msg.value()
             if raw is None:
+                await asyncio.to_thread(_commit_sync, consumer, msg)
                 continue
             raw_bytes = raw if isinstance(raw, bytes) else str(raw).encode()
-            try:
-                payload = _decode(deserializer, topic, raw_bytes)
-                await handler(payload)
-            except Exception:  # noqa: BLE001 — 워커는 한 메시지 실패로 죽지 않음
-                logger.exception("handler failed topic=%s offset=%s", topic, msg.offset())
+            mkey = msg.key()
+            await _process_one(
+                topic, raw_bytes, deserializer, handler, dlq, retry_max, dlq_suffix,
+                mkey.decode() if isinstance(mkey, bytes) else None,
+            )
+            await asyncio.to_thread(_commit_sync, consumer, msg)  # 성공/DLQ 후 전진
     finally:
+        await dlq.stop()
         await asyncio.to_thread(consumer.close)
+
+
+async def _process_one(
+    topic: str,
+    raw_bytes: bytes,
+    deserializer: AvroDeserializer,
+    handler: Callable[[dict[str, Any]], Awaitable[None]],
+    dlq: "KafkaProducer",
+    retry_max: int,
+    dlq_suffix: str,
+    key: str | None,
+) -> None:
+    """1건 처리 — 디코딩+핸들러(재시도). 실패 시 DLQ 발행. 예외를 밖으로 던지지 않음(offset 전진)."""
+    try:
+        payload = _decode(deserializer, topic, raw_bytes)
+    except Exception as exc:  # noqa: BLE001 — 디코딩 실패도 DLQ(poison)
+        await _to_dlq(dlq, topic, dlq_suffix, {}, f"decode: {exc}", 0, key)
+        logger.exception("decode failed → DLQ topic=%s", topic)
+        return
+    last_err = ""
+    for attempt in range(retry_max + 1):
+        try:
+            await handler(payload)
+            return
+        except Exception as exc:  # noqa: BLE001 — 재시도 후 DLQ
+            last_err = str(exc)
+            if attempt < retry_max:
+                await asyncio.sleep(_RETRY_BACKOFF * (attempt + 1))
+    await _to_dlq(dlq, topic, dlq_suffix, payload, last_err, retry_max + 1, key)
+    logger.error("handler failed %sx → DLQ topic=%s err=%s", retry_max + 1, topic, last_err)
+
+
+async def _to_dlq(
+    dlq: "KafkaProducer", topic: str, dlq_suffix: str,
+    payload: dict[str, Any], error: str, attempts: int, key: str | None,
+) -> None:
+    """DLQ 발행 — 원본 payload + 실패 메타(사람 검수·재투입용)."""
+    await dlq.publish(
+        f"{topic}{dlq_suffix}",
+        {
+            "original": payload,
+            "error": error[:500],
+            "attempts": attempts,
+            "failed_at": datetime.now(timezone.utc).isoformat(),
+            "source_topic": topic,
+        },
+        key=key,
+    )
+
+
+async def consume_forever(
+    *,
+    topic: str,
+    group_id: str,
+    bootstrap: str,
+    handler: Callable[[dict[str, Any]], Awaitable[None]],
+    schema_registry_url: str = "",
+) -> None:
+    """소비 진입점 — ㊱ P4로 `consume_reliable`(수동커밋+재시도+DLQ)에 위임(호출부 무변경)."""
+    await consume_reliable(
+        topic=topic, group_id=group_id, bootstrap=bootstrap, handler=handler,
+        schema_registry_url=schema_registry_url,
+    )
