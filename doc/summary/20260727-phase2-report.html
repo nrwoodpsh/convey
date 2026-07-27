@@ -1,0 +1,231 @@
+<title>CONVEY · 2차 개발 리포트</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --ground:#0e0e11; --panel:#16161b; --panel2:#1d1d24; --line:#2a2a32;
+    --ink:#ecebe5; --mut:#918d84; --faint:#6b6960;
+    --gold:#e9b44c; --gold-dim:#5a4a24;
+    --done:#5cc089; --wait:#5f9fd6; --gap:#e58057;
+    --done-bg:#123021; --wait-bg:#11263a; --gap-bg:#33200f;
+    --shadow:0 12px 40px #0009;
+  }
+  @media (prefers-color-scheme:light){
+    :root{
+      --ground:#f3f1ec; --panel:#fbfaf7; --panel2:#f0eee8; --line:#e0ddd4;
+      --ink:#22201b; --mut:#6d6a61; --faint:#918d83;
+      --gold:#b6841f; --gold-dim:#e7d9b4;
+      --done:#2f8f5c; --wait:#2f6ba8; --gap:#c25a30;
+      --done-bg:#e4f1e8; --wait-bg:#e4edf6; --gap-bg:#f6e7dd;
+      --shadow:0 10px 30px #0000000f;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0e0e11; --panel:#16161b; --panel2:#1d1d24; --line:#2a2a32;
+    --ink:#ecebe5; --mut:#918d84; --faint:#6b6960; --gold:#e9b44c; --gold-dim:#5a4a24;
+    --done:#5cc089; --wait:#5f9fd6; --gap:#e58057;
+    --done-bg:#123021; --wait-bg:#11263a; --gap-bg:#33200f; --shadow:0 12px 40px #0009;
+  }
+  :root[data-theme="light"]{
+    --ground:#f3f1ec; --panel:#fbfaf7; --panel2:#f0eee8; --line:#e0ddd4;
+    --ink:#22201b; --mut:#6d6a61; --faint:#918d83; --gold:#b6841f; --gold-dim:#e7d9b4;
+    --done:#2f8f5c; --wait:#2f6ba8; --gap:#c25a30;
+    --done-bg:#e4f1e8; --wait-bg:#e4edf6; --gap-bg:#f6e7dd; --shadow:0 10px 30px #0000000f;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--ground);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    line-height:1.55;font-size:15px}
+  .mono{font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 72px}
+
+  /* header */
+  .top{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 28px;
+    padding-bottom:22px;border-bottom:1px solid var(--line)}
+  .brand{font-weight:800;font-size:15px;letter-spacing:3px}
+  .brand .c{color:var(--gold)}
+  h1{margin:6px 0 0;font-size:clamp(26px,4.4vw,40px);font-weight:800;letter-spacing:-.02em;
+    text-wrap:balance;line-height:1.08}
+  .lede{color:var(--mut);max-width:52ch;margin:10px 0 0;font-size:14.5px}
+  .asof{margin-left:auto;text-align:right;color:var(--faint);font-size:11.5px;letter-spacing:.5px}
+  .asof b{color:var(--gold);font-weight:700}
+
+  /* status ribbon */
+  .ribbon{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0 8px}
+  .stat{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .stat .n{font-size:28px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stat .l{font-size:11px;letter-spacing:.6px;color:var(--mut);margin-top:2px;text-transform:uppercase}
+  .stat.g .n{color:var(--done)} .stat.w .n{color:var(--wait)} .stat.x .n{color:var(--gap)}
+
+  /* section */
+  section{margin-top:34px}
+  .eyebrow{display:flex;align-items:center;gap:10px;font-size:11.5px;letter-spacing:2px;
+    text-transform:uppercase;color:var(--gold);font-weight:700;margin:0 0 14px}
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--gold);border-radius:2px}
+  .eyebrow .sub{color:var(--faint);letter-spacing:.4px;font-weight:500;text-transform:none}
+
+  /* track grid */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 18px 8px;box-shadow:var(--shadow)}
+  .card > h2{margin:0 0 4px;font-size:16px;font-weight:800;letter-spacing:-.01em}
+  .card > .cap{color:var(--mut);font-size:12.5px;margin:0 0 12px}
+
+  .row{display:flex;align-items:baseline;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+  .rid{font-weight:800;font-size:14px;color:var(--gold);min-width:30px;text-align:center}
+  .rbody{flex:1;min-width:0}
+  .rttl{font-weight:650;font-size:14px}
+  .rdesc{color:var(--mut);font-size:12.5px;margin-top:1px}
+  .chip{align-self:center;font-size:10.5px;letter-spacing:.4px;font-weight:700;
+    padding:4px 9px;border-radius:999px;white-space:nowrap}
+  .chip.g{color:var(--done);background:var(--done-bg)}
+  .chip.w{color:var(--wait);background:var(--wait-bg)}
+  .chip.x{color:var(--gap);background:var(--gap-bg)}
+
+  /* gap callout */
+  .gap{background:var(--gap-bg);border:1px solid color-mix(in srgb,var(--gap) 40%,transparent);
+    border-radius:14px;padding:18px 20px}
+  .gap h2{margin:0 0 4px;font-size:16px;color:var(--gap)}
+  .gaprow{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:baseline;padding:10px 0;
+    border-top:1px solid color-mix(in srgb,var(--gap) 22%,transparent)}
+  .gaprow:first-of-type{border-top:none}
+  .gaprow .k{font-weight:750;font-size:13.5px;min-width:120px}
+  .gaprow .v{color:var(--ink);font-size:13px;flex:1;min-width:200px}
+  .gaprow .v b{color:var(--gap)}
+
+  /* verify strip */
+  .grid3{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:760px){.grid3{grid-template-columns:repeat(2,1fr)}}
+  .kv{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:13px 14px}
+  .kv .kn{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .kv .kl{font-size:11px;color:var(--mut);margin-top:3px;line-height:1.35}
+
+  /* pipeline */
+  .pipe{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
+  .node{font-size:12px;font-weight:700;padding:6px 11px;border-radius:8px;background:var(--panel2);
+    border:1px solid var(--line)}
+  .arw{color:var(--gold);font-weight:700}
+  .node.acc{border-color:var(--gold);color:var(--gold)}
+
+  /* next */
+  .next{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.next{grid-template-columns:1fr}}
+  .step{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);
+    border-radius:10px;padding:14px 16px}
+  .step .t{font-weight:750;font-size:14px}
+  .step .d{color:var(--mut);font-size:12.5px;margin-top:3px}
+
+  footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);
+    color:var(--faint);font-size:12px;display:flex;flex-wrap:wrap;gap:6px 18px}
+  footer b{color:var(--mut);font-weight:600}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="brand"><span class="c">C</span>ONVEY</div>
+      <h1>2차 개발 완료 리포트</h1>
+      <p class="lede">주식 리서치를 유튜브 쇼츠로 바꾸는 자동 파이프라인. 상품화(품질·관리화면·인증/발행)와 Kafka 정석 스택 학습을 한 세션에 완주.</p>
+    </div>
+    <div class="asof mono">기준 <b>2026-07-27</b><br>커밋 36f1857 이후</div>
+  </header>
+
+  <div class="ribbon">
+    <div class="stat g"><div class="n">8</div><div class="l">라운드 커밋 완료</div></div>
+    <div class="stat w"><div class="n">2</div><div class="l">검증·커밋 대기 (P4·P5)</div></div>
+    <div class="stat x"><div class="n">2</div><div class="l">실연결 미완 (외부키)</div></div>
+    <div class="stat"><div class="n mono">0</div><div class="l">드리프트 · 미검증 확언</div></div>
+  </div>
+
+  <section>
+    <p class="eyebrow">두 트랙 <span class="sub">— 상품화(Q·U·C) 병행 학습(T)</span></p>
+    <div class="cols">
+
+      <div class="card">
+        <h2>상품화 트랙 · Q·U·C</h2>
+        <p class="cap">품질을 올리고, 관리화면을 붙이고, 발행까지 잇는다.</p>
+
+        <div class="row"><span class="rid mono">㉜</span><div class="rbody"><div class="rttl">뉴스 종목 태깅 정밀화</div><div class="rdesc">제목 우선 + 본문 2회 이상 + 부분문자열 억제</div></div><span class="chip g">커밋됨</span></div>
+        <div class="row"><span class="rid mono">㊲</span><div class="rbody"><div class="rttl">이슈 중복 제거</div><div class="rdesc">source_url 기준 뉴스 카운트 dedup</div></div><span class="chip g">커밋됨</span></div>
+        <div class="row"><span class="rid mono">㉟</span><div class="rbody"><div class="rttl">온톨로지 확장</div><div class="rdesc">노드 5→9 · 엣지 5→12 · 도메인/레인지 제약</div></div><span class="chip g">커밋됨</span></div>
+        <div class="row"><span class="rid mono">㉝</span><div class="rbody"><div class="rttl">admin 운영 설정 (P1–P4)</div><div class="rdesc">종목·키워드·소스·기간 → news-feed·issue-detector 게이팅</div></div><span class="chip g">커밋됨</span></div>
+        <div class="row"><span class="rid mono">㊳</span><div class="rbody"><div class="rttl">시나리오 템플릿</div><div class="rdesc">대본 형식 노브를 admin_db로 승격</div></div><span class="chip g">커밋됨</span></div>
+        <div class="row"><span class="rid mono">㊴</span><div class="rbody"><div class="rttl">영상 배경 전략 (P1·P2)</div><div class="rdesc">라이브러리 섹터매칭 → 생성 → Pexels · 가독성 패널</div></div><span class="chip g">커밋됨</span></div>
+        <div class="row"><span class="rid mono">㊵</span><div class="rbody"><div class="rttl">대시보드 리디자인 (P1·P2)</div><div class="rdesc">설정·근거·지표 백엔드 + 탭·폼·패널 프런트</div></div><span class="chip g">커밋됨</span></div>
+        <div class="row"><span class="rid mono">㊶</span><div class="rbody"><div class="rttl">YouTube 발행 · Supabase 인증</div><div class="rdesc">코드·멱등·폴백 완료 — 실 외부연결은 아래 갭</div></div><span class="chip x">코드만</span></div>
+      </div>
+
+      <div class="card">
+        <h2>학습 트랙 · Kafka 정석 (㊱)</h2>
+        <p class="cap">날 JSON에서 실무 표준 이벤트 스택으로, 단계별로.</p>
+
+        <div class="row"><span class="rid mono">P1</span><div class="rbody"><div class="rttl">이벤트 봉투</div><div class="rdesc">event_id·type·version·producer·payload, 소비 자동 언랩</div></div><span class="chip g">커밋됨</span></div>
+        <div class="row"><span class="rid mono">P2</span><div class="rbody"><div class="rttl">Avro + Schema Registry</div><div class="rdesc">confluent-kafka 교체 · 호환성 위반 필드변경 거부</div></div><span class="chip g">커밋됨</span></div>
+        <div class="row"><span class="rid mono">P3</span><div class="rbody"><div class="rttl">Debezium 트랜잭션 아웃박스</div><div class="rdesc">wal_level=logical · 아웃박스 → CDC 발행 (유실 0)</div></div><span class="chip g">커밋됨</span></div>
+        <div class="row"><span class="rid mono">P4</span><div class="rbody"><div class="rttl">DLQ + 수동커밋</div><div class="rdesc">at-least-once · 재시도 후 *.dlq · 성공분만 offset 전진</div></div><span class="chip w">커밋 대기</span></div>
+        <div class="row"><span class="rid mono">P5</span><div class="rbody"><div class="rttl">Prometheus · Grafana</div><div class="rdesc">kafka-exporter → consumer_lag·throughput·dlq_rate</div></div><span class="chip w">커밋 대기</span></div>
+        <div class="row" style="border-top-style:dashed"><span class="rid mono" style="color:var(--faint)">◇</span><div class="rbody"><div class="rttl" style="color:var(--mut)">데이터 흐름은 전 구간 Avro로 라이브</div><div class="rdesc">P4·P5는 로컬 실스택 검증 완료 · 커밋만 남음</div></div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">정직한 갭 <span class="sub">— 코드는 되지만 실제 연결은 안 된 곳 (2차 점검 후 진행)</span></p>
+    <div class="gap">
+      <h2>㊶ 외부 실연결 2건 — 본인 계정 자격증명 필요</h2>
+      <div class="gaprow"><div class="k mono">YouTube 업로드</div><div class="v">client_id·secret은 있으나 <b>YOUTUBE_REFRESH_TOKEN 비어 있음</b> → 실 업로드 0회. 검증된 건 "키 없을 때 failed 폴백"뿐.</div></div>
+      <div class="gaprow"><div class="k mono">Supabase 인증</div><div class="v">JWKS 검증 코드는 활성이나 <b>SUPABASE_URL이 placeholder</b> → 실 프로젝트 미연결. 검증된 건 자체서명 JWKS 단위테스트뿐.</div></div>
+      <div class="gaprow"><div class="k mono">대시보드 노출</div><div class="v">:8091 무인증 로컬 유지 — <b>ADR 0010 결정</b>(개발=로컬, 배포=게이트웨이 뒤). 스킵이 아닌 의도.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">실스택 검증 하이라이트 <span class="sub">— 요약 아닌 실제 라이브 수치</span></p>
+    <div class="grid3">
+      <div class="kv"><div class="kn mono">14,756</div><div class="kl">Neo4j 그래프 노드 (파이프라인 라이브 증가)</div></div>
+      <div class="kv"><div class="kn mono">is_compat=false</div><div class="kl">Registry 호환성 거부 (필드 int→string)</div></div>
+      <div class="kv"><div class="kn mono">attempts=2 → DLQ</div><div class="kl">실패 핸들러 재시도 후 *.dlq 도달</div></div>
+      <div class="kv"><div class="kn mono">22</div><div class="kl">Prometheus consumer_lag 시계열</div></div>
+      <div class="kv"><div class="kn mono">outbox → topic</div><div class="kl">앱 발행 없이 DB 행만으로 도달 (유실 0)</div></div>
+      <div class="kv"><div class="kn mono">47 / 3</div><div class="kl">admin 종목 · 시나리오 템플릿 시드</div></div>
+      <div class="kv"><div class="kn mono">253 → 139</div><div class="kl">가독성 패널: 코너 vs 중앙 밝기</div></div>
+      <div class="kv"><div class="kn mono">단위 0 실패</div><div class="kl">봉투·Avro·DLQ·인증 · mypy --strict 0</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">파이프라인 <span class="sub">— 축적 → 선별 → 제작 → 발행, 전 구간 이벤트로 연결</span></p>
+    <div class="pipe mono">
+      <span class="node">news·market feed</span><span class="arw">→</span>
+      <span class="node acc">research · Neo4j 그래프</span><span class="arw">→</span>
+      <span class="node">issue-detector</span><span class="arw">→</span>
+      <span class="node">content · agent</span><span class="arw">→</span>
+      <span class="node acc">video-assembly · mp4</span><span class="arw">→</span>
+      <span class="node">사람 승인</span><span class="arw">→</span>
+      <span class="node">publishing · YouTube</span>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">다음 <span class="sub">— 순서대로</span></p>
+    <div class="next">
+      <div class="step"><div class="t">1 · 커밋 전 통합 스모크</div><div class="d">doc/ref/integration-scenario-phase2.md — 인프라·수집·설정·발행·이벤트·인증 한 바퀴 로컬 확인</div></div>
+      <div class="step"><div class="t">2 · P4·P5 커밋</div><div class="d">DLQ / 모니터링 — 분리 커밋 권장(라운드별 독립 이력)</div></div>
+      <div class="step"><div class="t">3 · YouTube 실연결</div><div class="d">refresh_token 획득 스크립트 → 본인 채널 동의 → 실 업로드(private) 검증</div></div>
+      <div class="step"><div class="t">4 · Supabase 실연결</div><div class="d">프로젝트 생성 → SUPABASE_URL 주입 → 게이트웨이 실 JWKS 유효/무효 토큰 검증</div></div>
+    </div>
+  </section>
+
+  <footer class="mono">
+    <b>가드레일 유지</b><span>무출처 0</span><span>텍스트 LLM=로컬 Ollama</span><span>자동 발행 금지·사람 승인</span><span>기본 private</span><span>.env 미커밋</span>
+  </footer>
+</div>
+
+<script>
+  // 시스템/토글 테마 동기화는 CSS 토큰이 담당 — JS 없음(정적 리포트).
+</script>
